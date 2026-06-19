@@ -158,7 +158,7 @@ export default function TopicsModule() {
           <div className="flex items-center gap-2">
             <SparklesIcon className="w-5 h-5 text-[#8B5CF6]" />
             <h3 className="text-base font-semibold text-[#F1F5F9]">爆款二创</h3>
-            <span className="text-xs text-[#94A3B8] bg-[#2A303C] px-2 py-0.5 rounded">粘贴爆款自动解析</span>
+            <span className="text-xs text-[#94A3B8] bg-[#2A303C] px-2 py-0.5 rounded">提交后AI助手解析二创</span>
           </div>
           <span className={`text-[#94A3B8] transition-transform ${remixExpanded ? 'rotate-180' : ''}`}>
             ▼
