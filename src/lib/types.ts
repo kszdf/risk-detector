@@ -1,12 +1,33 @@
-// 选题类型
+// 账号类型
+export type AccountType = 'main' | 'secondary';
+
+// 选题类型（按账号区分）
+export type MainTopicType = 'risk-trigger' | 'case-analysis' | 'policy-interpret' | 'course-attract';
+export type SecondaryTopicType = 'register-avoid' | 'process-science' | 'startup-remind' | 'agency-common';
+export type TopicType = MainTopicType | SecondaryTopicType;
+
+// 内容框架类型
+export type ContentFramework = 'B' | 'A' | 'C' | 'D'; // B=注册入口, A=代账留存, C=税筹利润, D=课程杠杆
+
+// 目标人群
+export type TargetAudience = 'startup' | 'small-biz' | 'medium-biz' | 'founder' | 'cfo';
+
+// 选题
 export interface Topic {
   id: string;
   title: string;
-  account: 'main' | 'secondary';
-  types: string[];
+  account: AccountType;
+  accountName: string;
+  type: TopicType;
+  typeName: string;
+  framework: ContentFramework;
+  coreContent: string;
+  targetAudience: TargetAudience[];
+  targetAudienceName: string;
+  hookPhrase: string; // 自诊钩子格式：打XX发你XX
+  conversionPath: string; // 预估转化路径
   duration: number;
   heatIndex: number;
-  scene: string;
   createdAt: string;
 }
 
@@ -14,34 +35,28 @@ export interface Topic {
 export interface ScriptSegment {
   timeStart: string;
   timeEnd: string;
-  content: string;
+  action: string; // 画面动作
+  content: string; // 口播文案
   emotion: string;
   isHook: boolean;
+  isEmpathy: boolean;
+  isCore: boolean;
+  isSelfCheck: boolean;
+  isCTA: boolean;
 }
 
-// 脚本类型
+// 脚本
 export interface Script {
   id: string;
   topicId: string;
   topicTitle: string;
+  account: AccountType;
+  accountName: string;
   segments: ScriptSegment[];
   duration: number;
-  style: string[];
+  style: string;
   hookPhrase: string;
   cta: string;
-  createdAt: string;
-}
-
-// 视频记录类型
-export interface VideoRecord {
-  id: string;
-  title: string;
-  publishDate: string;
-  views: number;
-  likes: number;
-  comments: number;
-  shares: number;
-  privateConversions: number;
   createdAt: string;
 }
 
@@ -50,6 +65,8 @@ export interface DigitalHuman {
   id: string;
   name: string;
   avatar: string;
+  provider: 'tencent' | 'guiji' | 'shanjian';
+  recommended: boolean;
 }
 
 // 视频生产任务
@@ -59,19 +76,57 @@ export interface VideoProductionTask {
   scriptTitle: string;
   digitalHumanId: string;
   digitalHumanName: string;
-  background: string;
+  digitalHumanProvider: string;
   subtitleStyle: string;
-  bgm: string;
+  bgmName: string;
   bgmVolume: number;
   scheduledDate: string;
-  status: 'pending' | 'processing' | 'completed';
+  scheduledTime: string;
+  status: 'draft' | 'submitted' | 'rendering' | 'review' | 'exported';
+  notes: string;
+  createdAt: string;
 }
 
-// 评论回复规则
-export interface CommentReplyRule {
+// 视频数据记录
+export interface VideoRecord {
   id: string;
-  keywords: string[];
+  title: string;
+  account: AccountType;
+  contentType: TopicType;
+  framework: ContentFramework;
+  publishDate: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  keywordTriggers: number; // 关键词触发数
+  privateConsults: number; // 私信咨询量
+  materialsSent: number; // 资料发放量
+  deepConsults: number; // 深度咨询量
+  transactions: number; // 成交量
+  createdAt: string;
+}
+
+// 计算指标
+export interface VideoMetrics {
+  totalViews: number;
+  totalComments: number;
+  totalKeywordTriggers: number;
+  totalPrivateConsults: number;
+  totalMaterialsSent: number;
+  totalDeepConsults: number;
+  totalTransactions: number;
+  keywordTriggerRate: number; // 关键词触发率
+  privateConversionRate: number; // 私信转化率
+  transactionConversionRate: number; // 成交转化率
+}
+
+// 评论关键词规则
+export interface CommentKeywordRule {
+  id: string;
+  keyword: string;
   replyTemplate: string;
+  materialToSend: string;
   priority: number;
 }
 
@@ -86,6 +141,8 @@ export interface PrivateMessage {
 export interface CustomerTier {
   id: string;
   name: string;
+  grade: 'A' | 'B' | 'C' | 'D';
+  label: '热客' | '温客' | '凉客' | '无效';
   description: string;
   criteria: string[];
   color: string;
@@ -94,11 +151,20 @@ export interface CustomerTier {
 // 产品转化话术
 export interface ProductPitch {
   id: string;
+  productCategory: 'B' | 'A' | 'C' | 'D';
   productName: string;
-  productType: string;
   pitchContent: string;
   painPoint: string;
   benefit: string;
+}
+
+// 优化建议
+export interface OptimizationSuggestion {
+  type: 'increase' | 'decrease' | 'maintain';
+  contentType: TopicType;
+  reason: string;
+  currentCount: number;
+  recommendedCount: number;
 }
 
 // 导航模块

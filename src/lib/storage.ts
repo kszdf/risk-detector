@@ -1,14 +1,14 @@
-import { Topic, Script, VideoRecord, VideoProductionTask, CommentReplyRule, PrivateMessage, CustomerTier, ProductPitch } from './types';
+import { Topic, Script, VideoRecord, VideoProductionTask, CommentKeywordRule, PrivateMessage, CustomerTier, ProductPitch, VideoMetrics } from './types';
 
 const STORAGE_KEYS = {
-  TOPICS: 'tax_workbench_topics',
-  SCRIPTS: 'tax_workbench_scripts',
-  VIDEO_RECORDS: 'tax_workbench_video_records',
-  PRODUCTION_TASKS: 'tax_workbench_production_tasks',
-  COMMENT_RULES: 'tax_workbench_comment_rules',
-  PRIVATE_MESSAGES: 'tax_workbench_private_messages',
-  CUSTOMER_TIERS: 'tax_workbench_customer_tiers',
-  PRODUCT_PITCHES: 'tax_workbench_product_pitches',
+  TOPICS: 'tax_workbench_topics_v2',
+  SCRIPTS: 'tax_workbench_scripts_v2',
+  VIDEO_RECORDS: 'tax_workbench_video_records_v2',
+  PRODUCTION_TASKS: 'tax_workbench_production_tasks_v2',
+  COMMENT_RULES: 'tax_workbench_comment_rules_v2',
+  PRIVATE_MESSAGES: 'tax_workbench_private_messages_v2',
+  CUSTOMER_TIERS: 'tax_workbench_customer_tiers_v2',
+  PRODUCT_PITCHES: 'tax_workbench_product_pitches_v2',
 } as const;
 
 // Generic helpers
@@ -121,15 +121,15 @@ export function deleteProductionTask(id: string): void {
 }
 
 // Comment Rules
-export function getCommentRules(): CommentReplyRule[] {
+export function getCommentRules(): CommentKeywordRule[] {
   return getFromStorage(STORAGE_KEYS.COMMENT_RULES, []);
 }
 
-export function saveCommentRules(rules: CommentReplyRule[]): void {
+export function saveCommentRules(rules: CommentKeywordRule[]): void {
   saveToStorage(STORAGE_KEYS.COMMENT_RULES, rules);
 }
 
-export function addCommentRule(rule: CommentReplyRule): void {
+export function addCommentRule(rule: CommentKeywordRule): void {
   const rules = getCommentRules();
   rules.unshift(rule);
   saveCommentRules(rules);
@@ -186,6 +186,32 @@ export function deleteProductPitch(id: string): void {
   saveProductPitches(pitches);
 }
 
+// Calculate video metrics
+export function calculateVideoMetrics(records: VideoRecord[]): VideoMetrics {
+  const totals = records.reduce((acc, r) => ({
+    views: acc.views + r.views,
+    comments: acc.comments + r.comments,
+    keywordTriggers: acc.keywordTriggers + r.keywordTriggers,
+    privateConsults: acc.privateConsults + r.privateConsults,
+    materialsSent: acc.materialsSent + r.materialsSent,
+    deepConsults: acc.deepConsults + r.deepConsults,
+    transactions: acc.transactions + r.transactions,
+  }), { views: 0, comments: 0, keywordTriggers: 0, privateConsults: 0, materialsSent: 0, deepConsults: 0, transactions: 0 });
+
+  return {
+    totalViews: totals.views,
+    totalComments: totals.comments,
+    totalKeywordTriggers: totals.keywordTriggers,
+    totalPrivateConsults: totals.privateConsults,
+    totalMaterialsSent: totals.materialsSent,
+    totalDeepConsults: totals.deepConsults,
+    totalTransactions: totals.transactions,
+    keywordTriggerRate: totals.views > 0 ? (totals.keywordTriggers / totals.views) * 100 : 0,
+    privateConversionRate: totals.keywordTriggers > 0 ? (totals.privateConsults / totals.keywordTriggers) * 100 : 0,
+    transactionConversionRate: totals.privateConsults > 0 ? (totals.transactions / totals.privateConsults) * 100 : 0,
+  };
+}
+
 // Generate unique ID
 export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
@@ -196,8 +222,53 @@ export function formatNumber(num: number): string {
   return num.toLocaleString('zh-CN');
 }
 
-// Calculate conversion rate
-export function calculateConversionRate(conversions: number, views: number): string {
-  if (views === 0) return '0%';
-  return ((conversions / views) * 100).toFixed(2) + '%';
+// Calculate percentage
+export function calculatePercentage(value: number, total: number): string {
+  if (total === 0) return '0%';
+  return ((value / total) * 100).toFixed(1) + '%';
+}
+
+// Get account name
+export function getAccountName(account: 'main' | 'secondary'): string {
+  return account === 'main' ? '张老师老板财税' : '创业老板的第一站';
+}
+
+// Get topic type name
+export function getTopicTypeName(type: string, account: 'main' | 'secondary'): string {
+  const mainTypes: Record<string, string> = {
+    'risk-trigger': '风险触发型',
+    'case-analysis': '案例拆解型',
+    'policy-interpret': '政策解读型',
+    'course-attract': '课程引流型',
+  };
+  const secondaryTypes: Record<string, string> = {
+    'register-avoid': '注册避坑型',
+    'process-science': '流程科普型',
+    'startup-remind': '创业提醒型',
+    'agency-common': '代账常识型',
+  };
+  return account === 'main' ? mainTypes[type] || type : secondaryTypes[type] || type;
+}
+
+// Get framework name
+export function getFrameworkName(framework: string): string {
+  const names: Record<string, string> = {
+    'B': 'B类-注册公司(入口)',
+    'A': 'A类-代账服务(留存)',
+    'C': 'C类-税务筹划(利润)',
+    'D': 'D类-培训课程(杠杆)',
+  };
+  return names[framework] || framework;
+}
+
+// Get audience name
+export function getAudienceName(audience: string): string {
+  const names: Record<string, string> = {
+    'startup': '创业初期老板',
+    'small-biz': '小微企业主',
+    'medium-biz': '中小企业主',
+    'founder': '公司创始人',
+    'cfo': '财务负责人',
+  };
+  return names[audience] || audience;
 }
