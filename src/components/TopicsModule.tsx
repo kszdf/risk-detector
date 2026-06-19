@@ -453,8 +453,8 @@ export default function TopicsModule() {
               <LightbulbIcon className="module-blue" size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">选题生成</h2>
-              <p className="text-sm text-muted-foreground">特劳特 · 灵感迸发</p>
+              <h2 className="text-lg font-semibold">找选题</h2>
+              <p className="text-sm text-muted-foreground">生成财税爆款选题</p>
             </div>
           </div>
 

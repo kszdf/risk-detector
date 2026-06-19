@@ -13,11 +13,11 @@ import OperationsModule from '@/components/OperationsModule';
 import { ModuleType, NavItem } from '@/lib/types';
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'topics', name: '特劳特', icon: 'Lightbulb', color: 'blue', description: '选题生成' },
-  { id: 'scripts', name: '灵犀', icon: 'FileText', color: 'green', description: '脚本生成' },
-  { id: 'production', name: '小丽', icon: 'Video', color: 'purple', description: '视频生产' },
-  { id: 'analytics', name: '千里眼', icon: 'BarChart', color: 'amber', description: '数据监控' },
-  { id: 'operations', name: '东风', icon: 'Users', color: 'red', description: '私域运营' },
+  { id: 'topics', name: '找选题', icon: 'Lightbulb', color: 'blue', description: '生成爆款选题' },
+  { id: 'scripts', name: '写脚本', icon: 'FileText', color: 'green', description: '编写口播脚本' },
+  { id: 'production', name: '做视频', icon: 'Video', color: 'purple', description: '生产数字人视频' },
+  { id: 'analytics', name: '看数据', icon: 'BarChart', color: 'amber', description: '分析转化数据' },
+  { id: 'operations', name: '管客户', icon: 'Users', color: 'red', description: '管理私域客户' },
 ];
 
 const IconComponents: Record<string, React.FC<{ className?: string; size?: number }>> = {

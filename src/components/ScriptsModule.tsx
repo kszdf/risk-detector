@@ -314,8 +314,8 @@ export default function ScriptsModule() {
               <FileTextIcon className="module-green" size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">脚本生成</h2>
-              <p className="text-sm text-muted-foreground">灵犀 · 心有灵犀</p>
+              <h2 className="text-lg font-semibold">写脚本</h2>
+              <p className="text-sm text-muted-foreground">编写60秒口播脚本</p>
             </div>
           </div>
 

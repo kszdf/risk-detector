@@ -235,8 +235,8 @@ export default function AnalyticsModule() {
               <BarChart3Icon className="module-gold" size={22} />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">数据监控</h2>
-              <p className="text-sm text-muted-foreground">千里眼 · 洞察秋毫</p>
+              <h2 className="text-lg font-semibold">看数据</h2>
+              <p className="text-sm text-muted-foreground">分析视频转化数据</p>
             </div>
           </div>
 

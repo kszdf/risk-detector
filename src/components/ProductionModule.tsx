@@ -226,8 +226,8 @@ export default function ProductionModule() {
                 <VideoIcon className="module-purple" size={22} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">视频生产</h2>
-                <p className="text-sm text-muted-foreground">小丽 · 数字造梦</p>
+                <h2 className="text-lg font-semibold">做视频</h2>
+                <p className="text-sm text-muted-foreground">生产数字人视频</p>
               </div>
             </div>
 

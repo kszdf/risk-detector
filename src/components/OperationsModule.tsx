@@ -151,8 +151,8 @@ export default function OperationsModule() {
                 <span className="text-xl">💬</span>
               </div>
               <div>
-                <h2 className="text-lg font-semibold">评论回复SOP</h2>
-                <p className="text-sm text-muted-foreground">东风 · 精准触达</p>
+                <h2 className="text-lg font-semibold">管客户</h2>
+                <p className="text-sm text-muted-foreground">管理私域客户运营</p>
               </div>
             </div>
 
