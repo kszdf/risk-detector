@@ -10,7 +10,7 @@
 coze dev
 ```
 
-启动后，在浏览器中打开 [http://localhost:5000](http://localhost:5000) 查看应用。
+启动后，在浏览器中打开 https://pq3s843fph.coze.site 查看应用。
 
 开发服务器支持热更新，修改代码后页面会自动刷新。
 
