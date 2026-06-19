@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { FileTextIcon, CopyIcon, TrashIcon, CheckIcon, ChevronDownIcon } from '@/components/icons';
+import React, { useState, useMemo, useCallback } from 'react';
+import { FileTextIcon, CopyIcon, TrashIcon, CheckIcon, ChevronDownIcon, SparklesIcon } from '@/components/icons';
 import { Topic, Script, ScriptSegment } from '@/lib/types';
 import { getTopics, getScripts, addScript, deleteScript, generateId, getAccountName } from '@/lib/storage';
 
@@ -26,6 +26,8 @@ export default function ScriptsModule() {
   const [generatedScript, setGeneratedScript] = useState<Script | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [showTopicDropdown, setShowTopicDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState<'new' | 'library'>('new');
 
@@ -36,6 +38,63 @@ export default function ScriptsModule() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // AI智能生成脚本
+  const generateAIScript = useCallback(async () => {
+    if (!selectedTopic) {
+      setAiError('请先选择一个选题');
+      return;
+    }
+
+    setIsAILoading(true);
+    setAiError(null);
+
+    try {
+      const response = await fetch('/api/ai/script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicId: selectedTopic.id,
+          topicTitle: selectedTopic.title,
+          coreContent: selectedTopic.coreContent,
+          account: selectedTopic.account,
+          hookPhrase: selectedTopic.hookPhrase,
+          duration,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('AI脚本生成失败');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.script) {
+        const newScript: Script = {
+          id: `ai_script_${Date.now()}`,
+          topicId: selectedTopic.id,
+          topicTitle: selectedTopic.title,
+          account: selectedTopic.account,
+          accountName: selectedTopic.accountName,
+          segments: data.script.segments || [],
+          duration: data.script.duration || duration,
+          style: data.script.style || '专业',
+          hookPhrase: data.script.hookPhrase || selectedTopic.hookPhrase,
+          cta: data.script.cta || '',
+          createdAt: new Date().toISOString(),
+        };
+
+        setGeneratedScript(newScript);
+      } else {
+        throw new Error(data.error || '生成失败');
+      }
+    } catch (error) {
+      console.error('AI脚本生成失败:', error);
+      setAiError(error instanceof Error ? error.message : 'AI脚本生成失败，请重试');
+    } finally {
+      setIsAILoading(false);
+    }
+  }, [selectedTopic, duration]);
 
   const generateScript = () => {
     if (!selectedTopic) return;
@@ -431,7 +490,7 @@ export default function ScriptsModule() {
               <button
                 onClick={generateScript}
                 disabled={!selectedTopic || isGenerating}
-                className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-lg hover:opacity-90 transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
+                className="h-12 px-4 bg-[#2A303C] text-[#F1F5F9] font-medium rounded-lg hover:bg-[#3A404C] transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -440,11 +499,31 @@ export default function ScriptsModule() {
                   </>
                 ) : (
                   <>
-                    <SparklesIcon />
-                    <span>生成60秒口播脚本</span>
+                    <SparklesIcon className="text-amber-300" />
+                    <span>模板脚本</span>
                   </>
                 )}
               </button>
+              <button
+                onClick={generateAIScript}
+                disabled={!selectedTopic || isAILoading}
+                className="h-12 px-4 bg-gradient-to-r from-[#10B981] to-[#059669] text-white font-medium rounded-lg hover:opacity-90 transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isAILoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>AI生成中...</span>
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="text-white" />
+                    <span>AI智能脚本</span>
+                  </>
+                )}
+              </button>
+              {aiError && (
+                <p className="text-sm text-red-400 mt-1">{aiError}</p>
+              )}
             </>
           )}
 
@@ -609,15 +688,3 @@ const EMOTION_COLORS: Record<string, string> = {
   '严肃': 'bg-gray-600/20 text-gray-500',
   '期待': 'bg-pink-500/20 text-pink-400',
 };
-
-function SparklesIcon({ className = '', size = 20 }: { className?: string; size?: number }) {
-  return (
-    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-      <path d="M5 3v4" />
-      <path d="M19 17v4" />
-      <path d="M3 5h4" />
-      <path d="M17 19h4" />
-    </svg>
-  );
-}

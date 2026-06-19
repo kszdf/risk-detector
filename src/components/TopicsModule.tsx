@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { LightbulbIcon, CopyIcon, TrashIcon, CheckIcon, PlusIcon, ChevronDownIcon, FileTextIcon, UsersIcon, TargetIcon, TrendingUpIcon, ArrowRightIcon, SparklesIcon } from '@/components/icons';
 import { Topic, AccountType, MainTopicType, SecondaryTopicType, TargetAudience, ContentFramework, TopicType } from '@/lib/types';
 import { getTopics, addTopic, deleteTopic, generateId, getAccountName, getTopicTypeName, getAudienceName, getFrameworkName } from '@/lib/storage';
@@ -353,6 +353,8 @@ export default function TopicsModule() {
   const [generatedTopics, setGeneratedTopics] = useState<Topic[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAILoading, setIsAILoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const topicTypes = account === 'main' ? MAIN_TOPIC_TYPES : SECONDARY_TOPIC_TYPES;
 
@@ -363,6 +365,63 @@ export default function TopicsModule() {
         : [...prev, typeId]
     );
   };
+
+  // AI智能生成选题
+  const generateAITopics = useCallback(async () => {
+    if (selectedTypes.length === 0) {
+      setAiError('请至少选择一个内容类型');
+      return;
+    }
+
+    setIsAILoading(true);
+    setAiError(null);
+
+    try {
+      const response = await fetch('/api/ai/topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          account,
+          contentTypes: selectedTypes,
+          count,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('AI选题生成失败');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.topics) {
+        const newTopics: Topic[] = data.topics.map((t: Record<string, string>, index: number) => ({
+          id: `ai_topic_${Date.now()}_${index}`,
+          title: t.title || t.核心内容 || '未命名选题',
+          coreContent: t.核心内容 || t.coreContent || '',
+          targetAudience: (t.目标人群 || t.targetAudience || '创业老板') as TargetAudience,
+          hookPhrase: t.自诊钩子 || t.hookPhrase || '',
+          conversionPath: t.预估转化路径 || t.conversionPath || '打关键词→私信→C类',
+          account,
+          accountName: account === 'main' ? '张老师老板财税' : '创业老板的第一站',
+          type: selectedTypes[0] as TopicType,
+          typeName: selectedTypes[0],
+          framework: 'C' as ContentFramework,
+          createdAt: new Date().toISOString(),
+        }));
+
+        setGeneratedTopics(newTopics);
+        setTopics(prev => [...prev, ...newTopics]);
+        newTopics.forEach(topic => addTopic(topic));
+      } else {
+        throw new Error(data.error || '生成失败');
+      }
+    } catch (error) {
+      console.error('AI生成失败:', error);
+      setAiError(error instanceof Error ? error.message : 'AI生成失败，请重试');
+    } finally {
+      setIsAILoading(false);
+    }
+  }, [account, selectedTypes, count]);
 
   const generateTopics = () => {
     setIsGenerating(true);
@@ -560,7 +619,7 @@ export default function TopicsModule() {
           <button
             onClick={generateTopics}
             disabled={isGenerating}
-            className="w-full h-12 bg-gradient-to-r from-primary to-blue-600 text-white font-medium rounded-lg hover:opacity-90 transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
+            className="h-12 px-4 bg-[#2A303C] text-[#F1F5F9] font-medium rounded-lg hover:bg-[#3A404C] transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isGenerating ? (
               <>
@@ -570,10 +629,30 @@ export default function TopicsModule() {
             ) : (
               <>
                 <SparklesIcon className="text-amber-300" />
-                <span>生成选题</span>
+                <span>模板选题</span>
               </>
             )}
           </button>
+          <button
+            onClick={generateAITopics}
+            disabled={isAILoading}
+            className="h-12 px-4 bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] text-white font-medium rounded-lg hover:opacity-90 transition-all btn-press disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isAILoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>AI生成中...</span>
+              </>
+            ) : (
+              <>
+                <SparklesIcon className="text-white" />
+                <span>AI智能选题</span>
+              </>
+            )}
+          </button>
+          {aiError && (
+            <p className="text-sm text-red-400 mt-1">{aiError}</p>
+          )}
         </div>
       </div>
 
