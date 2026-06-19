@@ -38,6 +38,7 @@ export default function TopicsModule() {
   const [remixRecords, setRemixRecords] = useState<RemixRecord[]>([]);
   const [remixUrl, setRemixUrl] = useState('');
   const [remixTranscript, setRemixTranscript] = useState('');
+  const [remixExpanded, setRemixExpanded] = useState(true);
 
   useEffect(() => {
     setTopics(getTopics());
@@ -150,46 +151,59 @@ export default function TopicsModule() {
 
       {/* 爆款二创区域 */}
       <div className="bg-[#161A22] border border-[#2A303C] rounded-xl p-4 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-base font-semibold text-[#F1F5F9]">爆款二创</h3>
-          <span className="text-xs text-[#94A3B8] bg-[#2A303C] px-2 py-0.5 rounded">粘贴爆款自动解析</span>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm text-[#94A3B8] mb-1.5">爆款链接</label>
-            <input
-              type="text"
-              value={remixUrl}
-              onChange={e => setRemixUrl(e.target.value)}
-              placeholder="粘贴爆款视频链接"
-              className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B]"
-            />
+        <div 
+          className="flex items-center justify-between cursor-pointer mb-4"
+          onClick={() => setRemixExpanded(!remixExpanded)}
+        >
+          <div className="flex items-center gap-2">
+            <SparklesIcon className="w-5 h-5 text-[#8B5CF6]" />
+            <h3 className="text-base font-semibold text-[#F1F5F9]">爆款二创</h3>
+            <span className="text-xs text-[#94A3B8] bg-[#2A303C] px-2 py-0.5 rounded">粘贴爆款自动解析</span>
           </div>
-          <div>
-            <label className="block text-sm text-[#94A3B8] mb-1.5">爆款逐字稿</label>
-            <textarea
-              value={remixTranscript}
-              onChange={e => setRemixTranscript(e.target.value)}
-              placeholder="粘贴视频口播原文，AI自动解析二创"
-              rows={2}
-              className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B] resize-none"
-            />
-          </div>
+          <span className={`text-[#94A3B8] transition-transform ${remixExpanded ? 'rotate-180' : ''}`}>
+            ▼
+          </span>
         </div>
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handleRemixSubmit}
-            disabled={!remixUrl && !remixTranscript}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm"
-          >
-            <SparklesIcon className="w-4 h-4" />
-            提交二创
-          </button>
-          <span className="text-xs text-[#64748B]">数据将保存至飞书多维表格</span>
-        </div>
+        
+        {remixExpanded && (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm text-[#94A3B8] mb-1.5">爆款链接</label>
+                <input
+                  type="text"
+                  value={remixUrl}
+                  onChange={e => setRemixUrl(e.target.value)}
+                  placeholder="粘贴爆款视频链接"
+                  className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-[#94A3B8] mb-1.5">爆款逐字稿</label>
+                <textarea
+                  value={remixTranscript}
+                  onChange={e => setRemixTranscript(e.target.value)}
+                  placeholder="粘贴视频口播原文"
+                  rows={4}
+                  className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B] resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handleRemixSubmit}
+                disabled={!remixUrl && !remixTranscript}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm"
+              >
+                提交二创
+              </button>
+              <span className="text-xs text-[#64748B]">数据将保存至飞书多维表格</span>
+            </div>
+          </>
+        )}
 
         {/* 提交记录列表 */}
-        {remixRecords.length > 0 && (
+        {remixExpanded && remixRecords.length > 0 && (
           <div className="mt-4 border-t border-[#2A303C] pt-4">
             <div className="text-sm text-[#94A3B8] mb-3">提交记录 ({remixRecords.length})</div>
             <div className="space-y-2 max-h-60 overflow-y-auto">
