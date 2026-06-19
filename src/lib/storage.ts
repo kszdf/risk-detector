@@ -1,4 +1,4 @@
-import { Topic, Script, VideoRecord, VideoProductionTask, CommentKeywordRule, PrivateMessage, CustomerTier, ProductPitch, VideoMetrics, Customer } from './types';
+import { Topic, Script, VideoRecord, VideoProductionTask, CommentKeywordRule, PrivateMessage, CustomerTier, ProductPitch, VideoMetrics, Customer, RemixRecord } from './types';
 
 const STORAGE_KEYS = {
   TOPICS: 'tax_workbench_topics_v2',
@@ -328,4 +328,40 @@ export function updateVideoRecord(id: string, updates: Partial<VideoRecord>): vo
     records[index] = { ...records[index], ...updates };
     saveVideoRecords(records);
   }
+}
+
+// Get remix records from localStorage
+export function getRemixRecords(): RemixRecord[] {
+  if (typeof window === 'undefined') return [];
+  const data = localStorage.getItem('remixRecords');
+  return data ? JSON.parse(data) : [];
+}
+
+// Save remix records to localStorage
+export function saveRemixRecords(records: RemixRecord[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('remixRecords', JSON.stringify(records));
+}
+
+// Add remix record
+export function addRemixRecord(record: RemixRecord): void {
+  const records = getRemixRecords();
+  records.unshift(record);
+  saveRemixRecords(records);
+}
+
+// Update remix record
+export function updateRemixRecord(id: string, updates: Partial<RemixRecord>): void {
+  const records = getRemixRecords();
+  const index = records.findIndex(r => r.id === id);
+  if (index !== -1) {
+    records[index] = { ...records[index], ...updates };
+    saveRemixRecords(records);
+  }
+}
+
+// Delete remix record
+export function deleteRemixRecord(id: string): void {
+  const records = getRemixRecords().filter(r => r.id !== id);
+  saveRemixRecords(records);
 }

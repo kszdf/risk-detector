@@ -196,3 +196,15 @@ export interface Customer {
   notes: string;
   createdAt: string;
 }
+
+// 爆款二创
+export interface RemixRecord {
+  id: string;
+  url: string;
+  transcript: string;
+  title: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  statusLabel: '待二创' | '二创中' | '已完成';
+  createdAt: string;
+  completedAt?: string;
+}

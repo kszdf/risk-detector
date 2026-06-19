@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { LightbulbIcon, CopyIcon, TrashIcon, PlusIcon, CheckIcon, XIcon, FilterIcon } from '@/components/icons';
-import { Topic, TopicStatus, TopicType, TargetAudience } from '@/lib/types';
-import { getTopics, saveTopic, deleteTopic } from '@/lib/storage';
+import { LightbulbIcon, CopyIcon, TrashIcon, PlusIcon, CheckIcon, XIcon, FilterIcon, SparklesIcon } from '@/components/icons';
+import { Topic, TopicStatus, TopicType, TargetAudience, RemixRecord } from '@/lib/types';
+import { getTopics, saveTopic, deleteTopic, getRemixRecords, addRemixRecord, updateRemixRecord, deleteRemixRecord } from '@/lib/storage';
 
 const ACCOUNT_LABELS: Record<string, string> = {
   main: '张老师老板财税',
@@ -34,8 +34,14 @@ export default function TopicsModule() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
 
+  // 爆款二创相关状态
+  const [remixRecords, setRemixRecords] = useState<RemixRecord[]>([]);
+  const [remixUrl, setRemixUrl] = useState('');
+  const [remixTranscript, setRemixTranscript] = useState('');
+
   useEffect(() => {
     setTopics(getTopics());
+    setRemixRecords(getRemixRecords());
   }, []);
 
   const filteredTopics = useMemo(() => {
@@ -68,6 +74,58 @@ export default function TopicsModule() {
     navigator.clipboard.writeText(text);
   };
 
+  // 爆款二创处理函数
+  const handleRemixSubmit = () => {
+    if (!remixUrl && !remixTranscript) return;
+    
+    const record: RemixRecord = {
+      id: `remix_${Date.now()}`,
+      url: remixUrl,
+      transcript: remixTranscript,
+      title: remixUrl ? remixUrl.substring(0, 50) + (remixUrl.length > 50 ? '...' : '') : '逐字稿内容',
+      status: 'pending',
+      statusLabel: '待二创',
+      createdAt: new Date().toISOString(),
+    };
+    
+    addRemixRecord(record);
+    setRemixRecords(prev => [record, ...prev]);
+    setRemixUrl('');
+    setRemixTranscript('');
+  };
+
+  const handleStartRemix = (record: RemixRecord) => {
+    const prompt = `请对以下爆款内容做二创：【链接】${record.url || '无'}\n【逐字稿】${record.transcript || '无'}`;
+    navigator.clipboard.writeText(prompt);
+    
+    // 更新状态为二创中
+    updateRemixRecord(record.id, { status: 'in-progress', statusLabel: '二创中' });
+    setRemixRecords(prev => prev.map(r => 
+      r.id === record.id ? { ...r, status: 'in-progress', statusLabel: '二创中' } : r
+    ));
+  };
+
+  const handleCompleteRemix = (recordId: string) => {
+    updateRemixRecord(recordId, { status: 'completed', statusLabel: '已完成', completedAt: new Date().toISOString() });
+    setRemixRecords(prev => prev.map(r => 
+      r.id === recordId ? { ...r, status: 'completed', statusLabel: '已完成' } : r
+    ));
+  };
+
+  const handleDeleteRemix = (recordId: string) => {
+    deleteRemixRecord(recordId);
+    setRemixRecords(prev => prev.filter(r => r.id !== recordId));
+  };
+
+  const getRemixStatusStyle = (status: string) => {
+    switch (status) {
+      case 'pending': return 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30';
+      case 'in-progress': return 'text-blue-400 bg-blue-500/20 border-blue-500/30';
+      case 'completed': return 'text-green-400 bg-green-500/20 border-green-500/30';
+      default: return 'text-gray-400 bg-gray-500/20 border-gray-500/30';
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* 头部统计 */}
@@ -88,6 +146,93 @@ export default function TopicsModule() {
           <div className="text-2xl font-bold text-gray-400">{stats.discarded}</div>
           <div className="text-sm text-[#94A3B8]">弃用</div>
         </div>
+      </div>
+
+      {/* 爆款二创区域 */}
+      <div className="bg-[#161A22] border border-[#2A303C] rounded-xl p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-base font-semibold text-[#F1F5F9]">爆款二创</h3>
+          <span className="text-xs text-[#94A3B8] bg-[#2A303C] px-2 py-0.5 rounded">粘贴爆款自动解析</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm text-[#94A3B8] mb-1.5">爆款链接</label>
+            <input
+              type="text"
+              value={remixUrl}
+              onChange={e => setRemixUrl(e.target.value)}
+              placeholder="粘贴爆款视频链接"
+              className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-[#94A3B8] mb-1.5">爆款逐字稿</label>
+            <textarea
+              value={remixTranscript}
+              onChange={e => setRemixTranscript(e.target.value)}
+              placeholder="粘贴视频口播原文，AI自动解析二创"
+              rows={2}
+              className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B] resize-none"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleRemixSubmit}
+            disabled={!remixUrl && !remixTranscript}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm"
+          >
+            <SparklesIcon className="w-4 h-4" />
+            提交二创
+          </button>
+          <span className="text-xs text-[#64748B]">数据将保存至飞书多维表格</span>
+        </div>
+
+        {/* 提交记录列表 */}
+        {remixRecords.length > 0 && (
+          <div className="mt-4 border-t border-[#2A303C] pt-4">
+            <div className="text-sm text-[#94A3B8] mb-3">提交记录 ({remixRecords.length})</div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {remixRecords.map(record => (
+                <div key={record.id} className="flex items-center gap-3 bg-[#0D0F14] rounded-lg p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-[#F1F5F9] truncate">{record.title}</div>
+                    <div className="text-xs text-[#64748B] mt-0.5">
+                      {new Date(record.createdAt).toLocaleString('zh-CN')}
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded text-xs border ${getRemixStatusStyle(record.status)}`}>
+                    {record.statusLabel}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {record.status !== 'completed' && (
+                      <button
+                        onClick={() => handleStartRemix(record)}
+                        className="px-2 py-1 text-xs bg-[#8B5CF6]/20 text-[#8B5CF6] rounded hover:bg-[#8B5CF6]/30 transition-colors"
+                      >
+                        开始二创
+                      </button>
+                    )}
+                    {record.status === 'in-progress' && (
+                      <button
+                        onClick={() => handleCompleteRemix(record.id)}
+                        className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors"
+                      >
+                        完成
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteRemix(record.id)}
+                      className="px-2 py-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 筛选器 */}
