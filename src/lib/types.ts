@@ -12,6 +12,9 @@ export type ContentFramework = 'B' | 'A' | 'C' | 'D'; // B=注册入口, A=代�
 // 目标人群
 export type TargetAudience = 'startup' | 'small-biz' | 'medium-biz' | 'founder' | 'cfo';
 
+// 选题状态
+export type TopicStatus = 'unused' | 'in-use' | 'discarded';
+
 // 选题
 export interface Topic {
   id: string;
@@ -20,14 +23,15 @@ export interface Topic {
   accountName: string;
   type: TopicType;
   typeName: string;
-  framework: ContentFramework;
-  coreContent: string;
-  targetAudience: TargetAudience[];
-  targetAudienceName: string;
+  framework?: ContentFramework;
+  coreContent?: string;
+  targetAudience: TargetAudience | string;
+  targetAudienceName?: string;
   hookPhrase: string; // 自诊钩子格式：打XX发你XX
   conversionPath: string; // 预估转化路径
-  duration: number;
-  heatIndex: number;
+  status: TopicStatus;
+  duration?: number;
+  heatIndex?: number;
   createdAt: string;
 }
 
@@ -176,4 +180,19 @@ export interface NavItem {
   icon: string;
   color: string;
   description: string;
+}
+
+// 客户
+export interface Customer {
+  id: string;
+  sourceVideoId: string;
+  sourceVideoTitle: string;
+  consultType: string;
+  contact: string;
+  tier: 'A' | 'B' | 'C' | 'D';
+  tierLabel: '热客' | '温客' | '凉客' | '无效';
+  followStatus: 'pending' | 'following' | 'converted' | 'lost';
+  followStatusLabel: '待跟进' | '跟进中' | '已成交' | '已流失';
+  notes: string;
+  createdAt: string;
 }

@@ -1,4 +1,4 @@
-import { Topic, Script, VideoRecord, VideoProductionTask, CommentKeywordRule, PrivateMessage, CustomerTier, ProductPitch, VideoMetrics } from './types';
+import { Topic, Script, VideoRecord, VideoProductionTask, CommentKeywordRule, PrivateMessage, CustomerTier, ProductPitch, VideoMetrics, Customer } from './types';
 
 const STORAGE_KEYS = {
   TOPICS: 'tax_workbench_topics_v2',
@@ -43,6 +43,17 @@ export function saveTopics(topics: Topic[]): void {
 export function addTopic(topic: Topic): void {
   const topics = getTopics();
   topics.unshift(topic);
+  saveTopics(topics);
+}
+
+export function saveTopic(topic: Topic): void {
+  const topics = getTopics();
+  const index = topics.findIndex(t => t.id === topic.id);
+  if (index >= 0) {
+    topics[index] = topic;
+  } else {
+    topics.unshift(topic);
+  }
   saveTopics(topics);
 }
 
@@ -271,4 +282,50 @@ export function getAudienceName(audience: string): string {
     'cfo': '财务负责人',
   };
   return names[audience] || audience;
+}
+
+// Get customers from localStorage
+export function getCustomers(): Customer[] {
+  if (typeof window === 'undefined') return [];
+  const data = localStorage.getItem('customers');
+  return data ? JSON.parse(data) : [];
+}
+
+// Save customers to localStorage
+export function saveCustomers(customers: Customer[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('customers', JSON.stringify(customers));
+}
+
+// Add customer
+export function addCustomer(customer: Customer): void {
+  const customers = getCustomers();
+  customers.unshift(customer);
+  saveCustomers(customers);
+}
+
+// Update customer
+export function updateCustomer(id: string, updates: Partial<Customer>): void {
+  const customers = getCustomers();
+  const index = customers.findIndex(c => c.id === id);
+  if (index !== -1) {
+    customers[index] = { ...customers[index], ...updates };
+    saveCustomers(customers);
+  }
+}
+
+// Delete customer
+export function deleteCustomer(id: string): void {
+  const customers = getCustomers().filter(c => c.id !== id);
+  saveCustomers(customers);
+}
+
+// Update video record (ensures all required fields)
+export function updateVideoRecord(id: string, updates: Partial<VideoRecord>): void {
+  const records = getVideoRecords();
+  const index = records.findIndex(r => r.id === id);
+  if (index !== -1) {
+    records[index] = { ...records[index], ...updates };
+    saveVideoRecords(records);
+  }
 }
