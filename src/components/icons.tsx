@@ -343,3 +343,10 @@ export const BuildingIcon: React.FC<IconProps> = ({ className = '', size = 20 })
     <path d="M8 14h.01" />
   </svg>
 );
+
+export const ArrowRightIcon: React.FC<IconProps> = ({ className = '', size = 20 }) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14" />
+    <path d="m12 5 7 7-7 7" />
+  </svg>
+);

@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LightbulbIcon, CopyIcon, TrashIcon, CheckIcon, PlusIcon } from '@/components/icons';
+import { LightbulbIcon, CopyIcon, TrashIcon, CheckIcon, PlusIcon, ChevronDownIcon, FileTextIcon, UsersIcon, TargetIcon, TrendingUpIcon, ArrowRightIcon, SparklesIcon } from '@/components/icons';
 import { Topic, AccountType, MainTopicType, SecondaryTopicType, TargetAudience, ContentFramework, TopicType } from '@/lib/types';
 import { getTopics, addTopic, deleteTopic, generateId, getAccountName, getTopicTypeName, getAudienceName, getFrameworkName } from '@/lib/storage';
 
 const ACCOUNTS = [
-  { id: 'main' as AccountType, name: '张老师老板财税', desc: '主号-专业权威' },
-  { id: 'secondary' as AccountType, name: '创业老板的第一站', desc: '副号-亲和实用' },
+  { id: 'main' as AccountType, name: '主号-张老师老板财税', label: '张老师老板财税', desc: '主号-专业权威定位' },
+  { id: 'secondary' as AccountType, name: '副号-创业老板第一站', label: '创业老板的第一站', desc: '副号-亲和实用定位' },
 ];
 
 const MAIN_TOPIC_TYPES = [
@@ -311,20 +311,26 @@ export default function TopicsModule() {
           {/* 账号选择 */}
           <div className="mb-6">
             <label className="block text-sm font-medium mb-3">选择账号</label>
-            <select
-              value={account}
-              onChange={(e) => {
-                setAccount(e.target.value as AccountType);
-                setSelectedTypes([]);
-              }}
-              className="w-full h-11 px-4 bg-background border border-border rounded-lg focus:outline-none focus:border-primary input-glow transition-all appearance-none cursor-pointer"
-            >
-              {ACCOUNTS.map(acc => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name} ({acc.desc})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={account}
+                onChange={(e) => {
+                  setAccount(e.target.value as AccountType);
+                  setSelectedTypes([]);
+                }}
+                className="w-full h-11 px-4 bg-background border border-border rounded-lg focus:outline-none focus:border-primary input-glow transition-all appearance-none cursor-pointer font-medium"
+              >
+                {ACCOUNTS.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" size={18} />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {account === 'main' ? '主号内容：风险触发型、案例拆解型、政策解读型、课程引流型' : '副号内容：注册避坑型、流程科普型、创业提醒型、代账常识型'}
+            </p>
           </div>
 
           {/* 内容类型 */}
@@ -515,48 +521,89 @@ function TopicCard({
   };
 
   return (
-    <div className="p-4 bg-background border border-border rounded-lg hover:border-primary/50 transition-all group">
-      <div className="flex items-start gap-3">
-        <span className="w-6 h-6 bg-primary/20 text-primary text-xs font-medium rounded flex items-center justify-center shrink-0">
+    <div className="p-5 bg-background border border-border rounded-lg hover:border-primary/50 transition-all group">
+      <div className="flex items-start gap-4">
+        <span className="w-7 h-7 bg-primary/20 text-primary text-sm font-bold rounded-lg flex items-center justify-center shrink-0">
           {index}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-medium leading-snug">{topic.title}</p>
+          {/* 标题 - 大字加粗 */}
+          <h4 className="text-base font-bold leading-snug text-foreground mb-3">
+            {topic.title}
+          </h4>
           
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            <span className={`tag ${topic.account === 'main' ? '' : 'tag-purple'}`}>
-              {topic.accountName}
+          {/* 核心内容 */}
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <FileTextIcon size={12} className="text-primary" />
+              核心内容
             </span>
+            <p className="text-sm text-foreground/80">{topic.coreContent}</p>
+          </div>
+          
+          {/* 目标人群 */}
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <UsersIcon size={12} className="text-green-500" />
+              目标人群
+            </span>
+            <div className="flex items-center gap-2">
+              <span className={`tag ${topic.account === 'main' ? 'tag-blue' : 'tag-purple'}`}>
+                {topic.accountName}
+              </span>
+              <span className="tag">{topic.targetAudienceName}</span>
+            </div>
+          </div>
+          
+          {/* 自诊钩子 - 格式固定 */}
+          <div className="mb-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+            <span className="inline-flex items-center gap-1.5 text-xs text-amber-400 mb-1">
+              <TargetIcon size={12} />
+              自诊钩子
+            </span>
+            <p className="text-sm font-semibold text-amber-300">
+              {topic.hookPhrase.split(/(打"[^"]+")发你/).map((part, idx) => {
+                if (part.startsWith('打"')) {
+                  const keyword = part.match(/"([^"]+)"/)?.[1] || '';
+                  return <React.Fragment key={idx}>打「<span className="text-amber-200 underline decoration-amber-400/50">{keyword}</span>」发你</React.Fragment>;
+                }
+                return part;
+              })}
+            </p>
+          </div>
+          
+          {/* 预估转化路径 */}
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <TrendingUpIcon size={12} className="text-purple-500" />
+              预估转化路径
+            </span>
+            <div className="flex flex-wrap gap-1 items-center">
+              {topic.conversionPath.split(' → ').map((step, i, arr) => (
+                <React.Fragment key={i}>
+                  <span className="text-xs text-foreground/70 bg-muted/50 px-2 py-0.5 rounded">{step}</span>
+                  {i < arr.length - 1 && <ArrowRightIcon size={12} className="text-muted-foreground/50" />}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+          
+          {/* 标签行 */}
+          <div className="flex flex-wrap gap-2 text-xs">
             <span className={`tag ${frameworkColorMap[topic.framework]}`}>
               {topic.framework}类-{topic.typeName}
             </span>
-            <span className="tag">{topic.targetAudienceName}</span>
-          </div>
-
-          <div className="mt-2 text-sm">
-            <div className="text-muted-foreground">
-              <span className="text-xs text-foreground/50">核心内容：</span>
-              {topic.coreContent}
-            </div>
-          </div>
-
-          <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded text-xs">
-            <span className="text-amber-400">自诊钩子：</span>
-            <span className="text-amber-200 font-medium">{topic.hookPhrase}</span>
-          </div>
-
-          <div className="mt-2 text-xs text-muted-foreground">
-            <span className="text-foreground/50">转化路径：</span>
-            {topic.conversionPath}
+            <span className="tag">{topic.duration}秒</span>
+            <span className="tag">热度 {topic.heatIndex}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           {showSave && onSave && (
             <button
               onClick={() => onSave(topic)}
               className="p-2 rounded-lg hover:bg-green-500/10 transition-colors"
-              title="保存"
+              title="保存到选题库"
             >
               <PlusIcon size={16} className="text-green-500" />
             </button>
@@ -564,7 +611,7 @@ function TopicCard({
           <button
             onClick={() => onCopy(topic.title, topic.id)}
             className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
-            title="复制"
+            title="复制标题"
           >
             {copiedId === topic.id ? (
               <CheckIcon size={16} className="text-green-500" />
@@ -584,17 +631,5 @@ function TopicCard({
         </div>
       </div>
     </div>
-  );
-}
-
-function SparklesIcon({ className = '', size = 20 }: { className?: string; size?: number }) {
-  return (
-    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-      <path d="M5 3v4" />
-      <path d="M19 17v4" />
-      <path d="M3 5h4" />
-      <path d="M17 19h4" />
-    </svg>
   );
 }

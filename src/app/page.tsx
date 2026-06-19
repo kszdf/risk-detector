@@ -111,8 +111,9 @@ export default function HomePage() {
           
           <div className="space-y-1">
             {NAV_ITEMS.map(item => {
-              const Icon = IconComponents[item.icon];
               const isActive = activeModule === item.id;
+              // 获取文字首字母作为图标
+              const initial = item.name.charAt(0);
               
               return (
                 <button
@@ -124,15 +125,12 @@ export default function HomePage() {
                       : 'hover:bg-muted/50'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors font-bold text-lg ${
                     isActive
                       ? `bg-primary/20`
                       : 'bg-muted group-hover:bg-muted/80'
-                  }`}>
-                    <Icon
-                      className={`transition-colors ${isActive ? colorMap[item.color] : 'text-muted-foreground'}`}
-                      size={20}
-                    />
+                  } ${isActive ? colorMap[item.color] : 'text-muted-foreground'}`}>
+                    {initial}
                   </div>
                   <div className="text-left flex-1">
                     <div className={`font-medium text-sm ${isActive ? colorMap[item.color] : ''}`}>
@@ -141,7 +139,7 @@ export default function HomePage() {
                     <div className="text-xs text-muted-foreground">{item.description}</div>
                   </div>
                   {isActive && (
-                    <div className={`w-2 h-2 rounded-full bg-${item.color}`} style={{
+                    <div className={`w-2 h-2 rounded-full`} style={{
                       backgroundColor: item.color === 'blue' ? '#3B82F6' : 
                                       item.color === 'green' ? '#10B981' : 
                                       item.color === 'purple' ? '#8B5CF6' : 

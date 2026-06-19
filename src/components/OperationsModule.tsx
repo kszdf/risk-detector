@@ -165,11 +165,14 @@ export default function OperationsModule() {
               {commentRules.map(rule => (
                 <div 
                   key={rule.id}
-                  className="p-3 bg-background border border-border rounded-lg hover:border-primary/50 transition-all"
+                  className="p-4 bg-background border border-border rounded-lg hover:border-amber-500/50 transition-all"
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-amber-400">#{rule.keyword}</span>
+                      <span className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center text-sm">
+                        {rule.keyword.slice(0, 2)}
+                      </span>
+                      <span className="font-semibold text-amber-300">#{rule.keyword}</span>
                       <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">
                         优先级 {rule.priority}
                       </span>
@@ -218,10 +221,17 @@ export default function OperationsModule() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-muted-foreground">{rule.replyTemplate}</p>
-                      <div className="mt-2 flex items-center gap-2 text-xs">
-                        <span className="text-green-400">📦 发放资料：</span>
-                        <span className="text-muted-foreground">{rule.materialToSend}</span>
+                      {/* 发放资料 */}
+                      <div className="mb-3 p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-green-400 font-medium">📦 发放资料：</span>
+                          <span className="text-green-300">{rule.materialToSend}</span>
+                        </div>
+                      </div>
+                      {/* 回复话术 */}
+                      <div className="p-2.5 bg-muted/50 rounded-lg">
+                        <div className="text-xs text-muted-foreground mb-1.5">回复话术</div>
+                        <p className="text-sm leading-relaxed">{rule.replyTemplate}</p>
                       </div>
                     </>
                   )}

@@ -36,9 +36,9 @@ const FRAMEWORK_COLORS: Record<string, string> = {
 };
 
 const RATE_THRESHOLDS = {
-  keywordTriggerRate: { excellent: 1, good: 0.5, normal: 0.2 },
-  privateConversionRate: { excellent: 20, good: 10, normal: 5 },
-  transactionConversionRate: { excellent: 10, good: 5, normal: 2 },
+  keywordTriggerRate: { red: 0.5, yellow: 1, unit: '%' }, // <0.5红，0.5-1黄，>1绿
+  privateConversionRate: { red: 10, yellow: 20, unit: '%' }, // <10红，10-20黄，>20绿
+  transactionConversionRate: { red: 5, yellow: 10, unit: '%' }, // <5红，5-10黄，>10绿
 };
 
 export default function AnalyticsModule() {
@@ -202,11 +202,25 @@ export default function AnalyticsModule() {
     return suggestions;
   }, [frameworkStats, records.length]);
 
-  const getRateStatus = (rate: number, threshold: typeof RATE_THRESHOLDS.keywordTriggerRate) => {
-    if (rate >= threshold.excellent) return { label: '优秀', color: 'text-green-400', bg: 'bg-green-500/20' };
-    if (rate >= threshold.good) return { label: '良好', color: 'text-blue-400', bg: 'bg-blue-500/20' };
-    if (rate >= threshold.normal) return { label: '一般', color: 'text-amber-400', bg: 'bg-amber-500/20' };
-    return { label: '待优化', color: 'text-red-400', bg: 'bg-red-500/20' };
+  // 红绿灯状态判断
+  const getTrafficLightStatus = (rate: number, type: 'keywordTriggerRate' | 'privateConversionRate' | 'transactionConversionRate') => {
+    const thresholds = RATE_THRESHOLDS[type];
+    if (type === 'keywordTriggerRate') {
+      if (rate >= thresholds.yellow) return { label: '绿', color: '#22c55e', bg: 'bg-green-500/20', textColor: 'text-green-400', emoji: '🟢' };
+      if (rate >= thresholds.red) return { label: '黄', color: '#f59e0b', bg: 'bg-amber-500/20', textColor: 'text-amber-400', emoji: '🟡' };
+      return { label: '红', color: '#ef4444', bg: 'bg-red-500/20', textColor: 'text-red-400', emoji: '🔴' };
+    }
+    if (type === 'privateConversionRate') {
+      if (rate >= thresholds.yellow) return { label: '绿', color: '#22c55e', bg: 'bg-green-500/20', textColor: 'text-green-400', emoji: '🟢' };
+      if (rate >= thresholds.red) return { label: '黄', color: '#f59e0b', bg: 'bg-amber-500/20', textColor: 'text-amber-400', emoji: '🟡' };
+      return { label: '红', color: '#ef4444', bg: 'bg-red-500/20', textColor: 'text-red-400', emoji: '🔴' };
+    }
+    if (type === 'transactionConversionRate') {
+      if (rate >= thresholds.yellow) return { label: '绿', color: '#22c55e', bg: 'bg-green-500/20', textColor: 'text-green-400', emoji: '🟢' };
+      if (rate >= thresholds.red) return { label: '黄', color: '#f59e0b', bg: 'bg-amber-500/20', textColor: 'text-amber-400', emoji: '🟡' };
+      return { label: '红', color: '#ef4444', bg: 'bg-red-500/20', textColor: 'text-red-400', emoji: '🔴' };
+    }
+    return { label: '灰', color: '#6b7280', bg: 'bg-gray-500/20', textColor: 'text-gray-400', emoji: '⚪' };
   };
 
   const maxBarWidth = Math.max(...frameworkStats.map(f => f.views), 1);
@@ -271,31 +285,84 @@ export default function AnalyticsModule() {
             />
           </div>
 
-          {/* 关键比率 */}
+          {/* 关键比率 - 红绿灯状态 */}
           <div className="mb-6">
-            <h4 className="text-sm font-medium mb-3">关键比率</h4>
-            <div className="space-y-3">
-              <RateIndicator
-                label="关键词触发率"
-                rate={metrics.keywordTriggerRate}
-                threshold={RATE_THRESHOLDS.keywordTriggerRate}
-                unit="%"
-                getStatus={getRateStatus}
-              />
-              <RateIndicator
-                label="私信转化率"
-                rate={metrics.privateConversionRate}
-                threshold={RATE_THRESHOLDS.privateConversionRate}
-                unit="%"
-                getStatus={getRateStatus}
-              />
-              <RateIndicator
-                label="成交转化率"
-                rate={metrics.transactionConversionRate}
-                threshold={RATE_THRESHOLDS.transactionConversionRate}
-                unit="%"
-                getStatus={getRateStatus}
-              />
+            <h4 className="text-sm font-medium mb-3">关键比率（红绿灯评估）</h4>
+            <div className="bg-muted/30 rounded-lg p-4 space-y-4">
+              {/* 关键词触发率 */}
+              <div className="flex items-center gap-4">
+                <div className="w-24 text-sm">关键词触发率</div>
+                <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full transition-all"
+                    style={{ 
+                      width: `${Math.min(metrics.keywordTriggerRate / RATE_THRESHOLDS.keywordTriggerRate.yellow * 100, 100)}%`,
+                      backgroundColor: getTrafficLightStatus(metrics.keywordTriggerRate, 'keywordTriggerRate').color,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-lg ${getTrafficLightStatus(metrics.keywordTriggerRate, 'keywordTriggerRate').textColor}`}>
+                    {getTrafficLightStatus(metrics.keywordTriggerRate, 'keywordTriggerRate').emoji}
+                  </span>
+                  <span className={`font-mono-num font-medium ${getTrafficLightStatus(metrics.keywordTriggerRate, 'keywordTriggerRate').textColor}`}>
+                    {metrics.keywordTriggerRate.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground w-32">
+                  阈值: <span className="text-green-400">&gt;1%</span>绿 / <span className="text-amber-400">0.5-1%</span>黄 / <span className="text-red-400">&lt;0.5%</span>红
+                </div>
+              </div>
+
+              {/* 私信转化率 */}
+              <div className="flex items-center gap-4">
+                <div className="w-24 text-sm">私信转化率</div>
+                <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full transition-all"
+                    style={{ 
+                      width: `${Math.min(metrics.privateConversionRate / RATE_THRESHOLDS.privateConversionRate.yellow * 100, 100)}%`,
+                      backgroundColor: getTrafficLightStatus(metrics.privateConversionRate, 'privateConversionRate').color,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-lg ${getTrafficLightStatus(metrics.privateConversionRate, 'privateConversionRate').textColor}`}>
+                    {getTrafficLightStatus(metrics.privateConversionRate, 'privateConversionRate').emoji}
+                  </span>
+                  <span className={`font-mono-num font-medium ${getTrafficLightStatus(metrics.privateConversionRate, 'privateConversionRate').textColor}`}>
+                    {metrics.privateConversionRate.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground w-32">
+                  阈值: <span className="text-green-400">&gt;20%</span>绿 / <span className="text-amber-400">10-20%</span>黄 / <span className="text-red-400">&lt;10%</span>红
+                </div>
+              </div>
+
+              {/* 成交转化率 */}
+              <div className="flex items-center gap-4">
+                <div className="w-24 text-sm">成交转化率</div>
+                <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full rounded-full transition-all"
+                    style={{ 
+                      width: `${Math.min(metrics.transactionConversionRate / RATE_THRESHOLDS.transactionConversionRate.yellow * 100, 100)}%`,
+                      backgroundColor: getTrafficLightStatus(metrics.transactionConversionRate, 'transactionConversionRate').color,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-lg ${getTrafficLightStatus(metrics.transactionConversionRate, 'transactionConversionRate').textColor}`}>
+                    {getTrafficLightStatus(metrics.transactionConversionRate, 'transactionConversionRate').emoji}
+                  </span>
+                  <span className={`font-mono-num font-medium ${getTrafficLightStatus(metrics.transactionConversionRate, 'transactionConversionRate').textColor}`}>
+                    {metrics.transactionConversionRate.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground w-32">
+                  阈值: <span className="text-green-400">&gt;10%</span>绿 / <span className="text-amber-400">5-10%</span>黄 / <span className="text-red-400">&lt;5%</span>红
+                </div>
+              </div>
             </div>
           </div>
 
@@ -579,40 +646,6 @@ function MetricCard({ label, value, icon, highlight = false }: { label: string; 
       <div className={`font-mono-num text-lg font-bold ${highlight ? 'text-green-400' : ''}`}>
         {value}
       </div>
-    </div>
-  );
-}
-
-function RateIndicator({ 
-  label, 
-  rate, 
-  threshold, 
-  unit,
-  getStatus,
-}: { 
-  label: string; 
-  rate: number; 
-  threshold: typeof RATE_THRESHOLDS.keywordTriggerRate;
-  unit: string;
-  getStatus: (rate: number, threshold: typeof RATE_THRESHOLDS.keywordTriggerRate) => { label: string; color: string; bg: string };
-}) {
-  const status = getStatus(rate, threshold);
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm w-24">{label}</span>
-      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-        <div 
-          className="h-full rounded-full transition-all"
-          style={{ 
-            width: `${Math.min(rate / threshold.excellent * 100, 100)}%`,
-            backgroundColor: status.color.includes('green') ? '#22c55e' : 
-                            status.color.includes('blue') ? '#3b82f6' : 
-                            status.color.includes('amber') ? '#f59e0b' : '#ef4444',
-          }}
-        />
-      </div>
-      <span className={`text-sm font-medium ${status.color}`}>{rate.toFixed(2)}{unit}</span>
-      <span className={`text-xs px-1.5 py-0.5 rounded ${status.bg} ${status.color}`}>{status.label}</span>
     </div>
   );
 }
