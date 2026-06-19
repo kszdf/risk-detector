@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { LightbulbIcon, CopyIcon, TrashIcon, PlusIcon, CheckIcon, XIcon, FilterIcon, SparklesIcon } from '@/components/icons';
-import { Topic, TopicStatus, TopicType, TargetAudience, RemixRecord } from '@/lib/types';
+import { Topic, TopicStatus, TopicType, TargetAudience, RemixRecord, VideoSource, VIDEO_SOURCE_LABELS } from '@/lib/types';
 import { getTopics, saveTopic, deleteTopic, getRemixRecords, addRemixRecord, updateRemixRecord, deleteRemixRecord } from '@/lib/storage';
 
 const ACCOUNT_LABELS: Record<string, string> = {
@@ -31,6 +31,7 @@ export default function TopicsModule() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [filterStatus, setFilterStatus] = useState<TopicStatus | 'all'>('all');
   const [filterAccount, setFilterAccount] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState<Topic | null>(null);
 
@@ -38,6 +39,7 @@ export default function TopicsModule() {
   const [remixRecords, setRemixRecords] = useState<RemixRecord[]>([]);
   const [remixUrl, setRemixUrl] = useState('');
   const [remixTranscript, setRemixTranscript] = useState('');
+  const [remixSource, setRemixSource] = useState('抖音');
   const [remixExpanded, setRemixExpanded] = useState(true);
 
   useEffect(() => {
@@ -49,9 +51,10 @@ export default function TopicsModule() {
     return topics.filter(t => {
       if (filterStatus !== 'all' && t.status !== filterStatus) return false;
       if (filterAccount !== 'all' && t.account !== filterAccount) return false;
+      if (filterSource !== 'all' && t.source !== filterSource) return false;
       return true;
     });
-  }, [topics, filterStatus, filterAccount]);
+  }, [topics, filterStatus, filterAccount, filterSource]);
 
   const stats = useMemo(() => ({
     total: topics.length,
@@ -83,6 +86,8 @@ export default function TopicsModule() {
       id: `remix_${Date.now()}`,
       url: remixUrl,
       transcript: remixTranscript,
+      source: remixSource,
+      sourceLabel: remixSource,
       title: remixUrl ? remixUrl.substring(0, 50) + (remixUrl.length > 50 ? '...' : '') : '逐字稿内容',
       status: 'pending',
       statusLabel: '待二创',
@@ -167,7 +172,24 @@ export default function TopicsModule() {
         
         {remixExpanded && (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm text-[#94A3B8] mb-1.5">爆款来源</label>
+                <select
+                  value={remixSource}
+                  onChange={e => setRemixSource(e.target.value)}
+                  className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9]"
+                >
+                  <option value="抖音">抖音</option>
+                  <option value="视频号">视频号</option>
+                  <option value="小红书">小红书</option>
+                  <option value="快手">快手</option>
+                  <option value="B站">B站</option>
+                  <option value="公众号">公众号</option>
+                  <option value="知乎">知乎</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-sm text-[#94A3B8] mb-1.5">爆款链接</label>
                 <input
@@ -184,7 +206,7 @@ export default function TopicsModule() {
                   value={remixTranscript}
                   onChange={e => setRemixTranscript(e.target.value)}
                   placeholder="粘贴视频口播原文"
-                  rows={4}
+                  rows={1}
                   className="w-full bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B] resize-none"
                 />
               </div>
@@ -210,7 +232,12 @@ export default function TopicsModule() {
               {remixRecords.map(record => (
                 <div key={record.id} className="flex items-center gap-3 bg-[#0D0F14] rounded-lg p-3">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-[#F1F5F9] truncate">{record.title}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 text-xs rounded bg-[#8B5CF6]/20 text-purple-400">
+                        {record.source}
+                      </span>
+                      <div className="text-sm text-[#F1F5F9] truncate">{record.title}</div>
+                    </div>
                     <div className="text-xs text-[#64748B] mt-0.5">
                       {new Date(record.createdAt).toLocaleString('zh-CN')}
                     </div>
@@ -274,6 +301,21 @@ export default function TopicsModule() {
           <option value="main">主号</option>
           <option value="secondary">副号</option>
         </select>
+        <select
+          value={filterSource}
+          onChange={e => setFilterSource(e.target.value)}
+          className="bg-[#0D0F14] border border-[#2A303C] rounded-lg px-3 py-1.5 text-sm text-[#F1F5F9]"
+        >
+          <option value="all">全部来源</option>
+          <option value="抖音">抖音</option>
+          <option value="视频号">视频号</option>
+          <option value="小红书">小红书</option>
+          <option value="快手">快手</option>
+          <option value="B站">B站</option>
+          <option value="公众号">公众号</option>
+          <option value="知乎">知乎</option>
+          <option value="其他">其他</option>
+        </select>
         <div className="flex-1" />
         <button
           onClick={() => setShowAddModal(true)}
@@ -310,6 +352,11 @@ export default function TopicsModule() {
                       <span className="px-2 py-1 text-xs rounded bg-[#3B82F6]/20 text-blue-400">
                         {ACCOUNT_LABELS[topic.account] || topic.account}
                       </span>
+                      {topic.source && (
+                        <span className="px-2 py-1 text-xs rounded bg-[#8B5CF6]/20 text-purple-400">
+                          来自{topic.source}
+                        </span>
+                      )}
                       <span className="px-2 py-1 text-xs rounded bg-[#F59E0B]/20 text-amber-400">
                         {TOPIC_TYPE_LABELS[topic.type] || topic.type}
                       </span>

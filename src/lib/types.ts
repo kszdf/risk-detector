@@ -32,6 +32,8 @@ export interface Topic {
   status: TopicStatus;
   duration?: number;
   heatIndex?: number;
+  source?: string; // 爆款来源
+  sourceLabel?: string; // 爆款来源标签
   createdAt: string;
 }
 
@@ -197,6 +199,20 @@ export interface Customer {
   createdAt: string;
 }
 
+// 爆款来源
+export type VideoSource = 'douyin' | 'shipinhao' | 'xiaohongshu' | 'kuaishou' | 'bilibili' | 'gongzhonghao' | 'zhihu' | 'other';
+
+export const VIDEO_SOURCE_LABELS: Record<VideoSource, string> = {
+  douyin: '抖音',
+  shipinhao: '视频号',
+  xiaohongshu: '小红书',
+  kuaishou: '快手',
+  bilibili: 'B站',
+  gongzhonghao: '公众号',
+  zhihu: '知乎',
+  other: '其他',
+};
+
 // 爆款二创
 export interface RemixRecord {
   id: string;
@@ -205,6 +221,8 @@ export interface RemixRecord {
   title: string;
   status: 'pending' | 'in-progress' | 'completed';
   statusLabel: '待二创' | '二创中' | '已完成';
+  source: string; // 爆款来源(抖音/视频号/小红书/快手/B站/公众号/知乎/其他)
+  sourceLabel: string; // 来源标签，同source
   createdAt: string;
   completedAt?: string;
 }
