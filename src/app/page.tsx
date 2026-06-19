@@ -13,11 +13,11 @@ import OperationsModule from '@/components/OperationsModule';
 import { ModuleType, NavItem } from '@/lib/types';
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'topics', name: '找选题', icon: 'Lightbulb', color: 'blue', description: '生成爆款选题' },
-  { id: 'scripts', name: '写脚本', icon: 'FileText', color: 'green', description: '编写口播脚本' },
-  { id: 'production', name: '做视频', icon: 'Video', color: 'purple', description: '生产数字人视频' },
-  { id: 'analytics', name: '看数据', icon: 'BarChart', color: 'amber', description: '分析转化数据' },
-  { id: 'operations', name: '管客户', icon: 'Users', color: 'red', description: '管理私域客户' },
+  { id: 'topics', name: '找选题', icon: 'Lightbulb', color: 'blue', description: '选题库管理与筛选' },
+  { id: 'scripts', name: '写脚本', icon: 'FileText', color: 'green', description: '脚本编辑与保存' },
+  { id: 'production', name: '做视频', icon: 'Video', color: 'purple', description: '数字人指引与排程' },
+  { id: 'analytics', name: '看数据', icon: 'BarChart', color: 'amber', description: '数据录入与追踪' },
+  { id: 'operations', name: '管客户', icon: 'Users', color: 'red', description: '客户档案与话术' },
 ];
 
 const IconComponents: Record<string, React.FC<{ className?: string; size?: number }>> = {
@@ -86,8 +86,8 @@ export default function HomePage() {
               <BuildingIcon size={22} className="text-white" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg gradient-text">财税短视频获客系统</h1>
-              <p className="text-xs text-muted-foreground">Tax Short Video Marketing Platform</p>
+              <h1 className="font-semibold text-lg gradient-text">税智云工作台</h1>
+              <p className="text-xs text-muted-foreground">财税短视频获客工作台</p>
             </div>
           </div>
           
@@ -159,7 +159,7 @@ export default function HomePage() {
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-medium">系统状态正常</span>
             </div>
-            <p className="text-xs text-muted-foreground">所有数据已保存至本地存储</p>
+            <p className="text-xs text-muted-foreground">数据存储：飞书多维表格</p>
           </div>
         </div>
       </aside>
