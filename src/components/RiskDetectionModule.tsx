@@ -186,6 +186,10 @@ export default function RiskDetectionModule() {
   const [riskScore, setRiskScore] = useState(0);
   const [financialResults, setFinancialResults] = useState<any[]>([]);
   const [questionResults, setQuestionResults] = useState<RiskQuestionAnswer[]>([]);
+  
+  // 保存状态
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState('');
 
   const updateFinancialData = (key: string, value: string) => {
     setFinancialData(prev => ({ ...prev, [key]: value }));
@@ -195,7 +199,7 @@ export default function RiskDetectionModule() {
     setRiskAnswers(prev => ({ ...prev, [id]: answer }));
   };
 
-  const calculateResults = () => {
+  const calculateResults = async () => {
     const revenue = parseFloat(financialData.revenue) || 0;
     const cost = parseFloat(financialData.cost) || 0;
     const profit = parseFloat(financialData.profit) || 0;
@@ -292,60 +296,113 @@ export default function RiskDetectionModule() {
     setQuestionResults(questionResultsData);
     setRiskScore(totalScore);
     setStep(3);
+    setSaveStatus('saving');
+    setSaveMessage('正在保存...');
 
     // 保存到飞书
-    saveToFeishu(revenue, cost, profit, vat, cit, totalAssets, totalLiabilities, receivables, inventory, advancePayment, results, questionResultsData, totalScore);
+    const saveResult = await saveToFeishu(revenue, cost, profit, vat, cit, totalAssets, totalLiabilities, receivables, inventory, advancePayment, results, questionResultsData, totalScore);
+    
+    if (saveResult.success) {
+      setSaveStatus('success');
+      setSaveMessage(`报告已保存，ID: ${saveResult.detectionId}`);
+    } else {
+      setSaveStatus('error');
+      setSaveMessage(saveResult.error || '保存失败，请重试');
+    }
   };
 
+  // 保存到飞书（通过后端API）
   const saveToFeishu = async (
     revenue: number, cost: number, profit: number, vat: number, cit: number,
     totalAssets: number, totalLiabilities: number, receivables: number, inventory: number, advancePayment: number,
     results: any[], questions: RiskQuestionAnswer[], totalScore: number
   ) => {
     try {
+      // 风险项明细
       const riskItems = questions
         .filter(q => q.riskLevel !== 'low')
         .map(q => `${q.id}:${q.selected}`)
         .join(';');
 
-      const fields: Record<string, string | number> = {
-        '企业名称': companyName,
-        '所属行业': industry,
-        '检测年份': new Date().getFullYear(),
-        '营业收入(万元)': revenue,
-        '营业成本(万元)': cost,
-        '利润总额(万元)': profit,
-        '实缴增值税(万元)': vat,
-        '实缴所得税(万元)': cit,
-        '总资产(万元)': totalAssets,
-        '总负债(万元)': totalLiabilities,
-        '应收账款(万元)': receivables,
-        '期末存货(万元)': inventory,
-        '预收账款(万元)': advancePayment,
-        '增值税税负率': results.find(r => r.key === 'vatRate')?.value.toFixed(2) || '0',
-        '所得税贡献率': results.find(r => r.key === 'citRate')?.value.toFixed(2) || '0',
-        '毛利率': results.find(r => r.key === 'grossMargin')?.value.toFixed(2) || '0',
-        '净利率': results.find(r => r.key === 'netMargin')?.value.toFixed(2) || '0',
-        '资产负债率': results.find(r => r.key === 'debtRatio')?.value.toFixed(2) || '0',
-        '综合风险等级': getRiskLevel(totalScore).label,
-        '风险项明细': riskItems || '无明显风险',
-        '检测时间': new Date().toISOString(),
-        '联系电话': contactPhone
-      };
+      // 财务指标结果JSON
+      const generalRiskResults = JSON.stringify(
+        results.map(r => ({
+          key: r.key,
+          name: r.name,
+          value: r.value,
+          riskLevel: r.riskLevel,
+          range: r.range
+        }))
+      );
 
-      await fetch('https://api.coze.cn/v1/tables/tables/tblyGuEsCmAVyGwa/records', {
+      // 风险问卷结果JSON
+      const industryRiskResults = JSON.stringify(
+        questions.map(q => ({
+          id: q.id,
+          question: q.selected,
+          riskLevel: q.riskLevel
+        }))
+      );
+
+      // 计算8项财务指标
+      const vatRate = revenue > 0 ? (vat / revenue) * 100 : 0;
+      const citRate = revenue > 0 ? (cit / revenue) * 100 : 0;
+      const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+      const netMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+      const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
+
+      const response = await fetch('/api/risk-detect', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer pat.MvJ0XXXXX',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          base_token: 'ZvwvbfFoZa5V0hsndvBcNyc5nQg',
-          fields
+          // 基本信息
+          enterpriseName: companyName,
+          contactPerson: '',
+          contactPhone: contactPhone,
+          customerEmail: '',
+          industry: industry,
+          detectionYear: new Date().getFullYear(),
+          
+          // 财务数据
+          revenue,
+          cost,
+          profit,
+          vat,
+          cit,
+          totalAssets,
+          totalLiabilities,
+          receivables,
+          inventory,
+          advancePayment,
+          
+          // 财务指标
+          vatRate: vatRate.toFixed(2),
+          citRate: citRate.toFixed(2),
+          grossMargin: grossMargin.toFixed(2),
+          netMargin: netMargin.toFixed(2),
+          debtRatio: debtRatio.toFixed(2),
+          
+          // 风险信息
+          riskScore: totalScore,
+          riskDetails: riskItems || '无明显风险',
+          generalRiskResults,
+          industryRiskResults,
+          reportStatus: '待审核'
         })
       });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return { success: true, detectionId: data.data?.detectionId };
+      } else {
+        return { success: false, error: data.error || '保存失败' };
+      }
     } catch (err) {
       console.error('保存失败:', err);
+      return { success: false, error: '网络错误，请重试' };
     }
   };
 
@@ -649,6 +706,32 @@ export default function RiskDetectionModule() {
               </div>
             </div>
 
+            {/* 保存状态提示 */}
+            {saveStatus !== 'idle' && (
+              <div className={cn(
+                'rounded-lg p-4 text-center',
+                saveStatus === 'saving' && 'bg-[#2A303C]/50',
+                saveStatus === 'success' && 'bg-[rgba(52,168,83,0.15)]',
+                saveStatus === 'error' && 'bg-[rgba(234,67,53,0.15)]'
+              )}>
+                {saveStatus === 'saving' && (
+                  <span className="text-[#94A3B8]">保存中...</span>
+                )}
+                {saveStatus === 'success' && (
+                  <div className="flex items-center justify-center gap-2 text-[#34a853]">
+                    <CheckCircleIcon className="w-5 h-5" />
+                    <span>{saveMessage}</span>
+                  </div>
+                )}
+                {saveStatus === 'error' && (
+                  <div className="flex items-center justify-center gap-2 text-[#ea4335]">
+                    <AlertTriangleIcon className="w-5 h-5" />
+                    <span>{saveMessage}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* CTA */}
             <div className="bg-gradient-to-r from-[#3B82F6]/20 to-[#8B5CF6]/20 rounded-xl border border-[#3B82F6]/30 p-6 text-center">
               <h4 className="text-lg font-semibold text-[#F1F5F9] mb-2">
@@ -701,7 +784,13 @@ export default function RiskDetectionModule() {
 
           {step < 3 ? (
             <button
-              onClick={() => step === 2 ? calculateResults() : setStep(step + 1)}
+              onClick={async () => {
+                if (step === 2) {
+                  await calculateResults();
+                } else {
+                  setStep(step + 1);
+                }
+              }}
               disabled={!canProceed()}
               className={cn(
                 'flex items-center gap-2 px-6 py-3 rounded-lg transition-all',
