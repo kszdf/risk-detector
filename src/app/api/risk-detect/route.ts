@@ -78,25 +78,25 @@ export async function POST(request: NextRequest) {
     // 构建飞书多维表格字段数据（使用中文字段名）
     // 注意：飞书多选字段需要用 { text: '值' } 格式
     const fields: Record<string, any> = {
-      // 基本信息
+      // 基本信息（支持多种可能的字段名）
       '企业名称': body.enterpriseName || body.companyName || '',
-      '联系人': body.contactPerson || '',
+      '联系人': body.contactPerson || body.contactName || '',
       '联系电话': body.contactPhone || '',
-      '客户邮箱': body.customerEmail || '',
+      '客户邮箱': body.customerEmail || body.email || '',
       '所属行业': typeof body.industry === 'string' ? body.industry : (body.industry?.text || ''),
-      '检测年份': body.detectionYear?.toString() || new Date().getFullYear().toString(),
+      '检测年份': body.detectionYear?.toString() || body.year?.toString() || '2025',
       
-      // 财务数据（数值类型）
-      '营业收入(万元)': Number(body.revenue) || 0,
-      '营业成本(万元)': Number(body.cost) || 0,
-      '利润总额(万元)': Number(body.profit) || 0,
-      '实缴增值税(万元)': Number(body.vat) || 0,
-      '实缴所得税(万元)': Number(body.cit) || 0,
-      '总资产(万元)': Number(body.totalAssets) || 0,
-      '总负债(万元)': Number(body.totalLiabilities) || 0,
-      '应收账款(万元)': Number(body.receivables) || 0,
-      '期末存货(万元)': Number(body.inventory) || 0,
-      '预收账款(万元)': Number(body.advancePayment) || 0,
+      // 财务数据（数值类型，支持多种字段名）
+      '营业收入(万元)': Number(body.revenue || body.income) || 0,
+      '营业成本(万元)': Number(body.cost || body.expense) || 0,
+      '利润总额(万元)': Number(body.profit || body.profitTotal) || 0,
+      '实缴增值税(万元)': Number(body.vat || body.vatPaid) || 0,
+      '实缴所得税(万元)': Number(body.cit || body.incomeTaxPaid) || 0,
+      '总资产(万元)': Number(body.totalAssets || body.assets) || 0,
+      '总负债(万元)': Number(body.totalLiabilities || body.liabilities) || 0,
+      '应收账款(万元)': Number(body.receivables || body.accountsReceivable) || 0,
+      '期末存货(万元)': Number(body.inventory || body.stock) || 0,
+      '预收账款(万元)': Number(body.advancePayment || body.advanceReceipts) || 0,
       
       // 财务指标（数值类型）
       '增值税税负率': Number(body.vatRate) || 0,
