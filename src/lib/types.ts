@@ -174,7 +174,7 @@ export interface OptimizationSuggestion {
 }
 
 // 导航模块
-export type ModuleType = 'topics' | 'scripts' | 'production' | 'analytics' | 'operations';
+export type ModuleType = 'topics' | 'scripts' | 'production' | 'analytics' | 'operations' | 'risk-detection';
 
 export interface NavItem {
   id: ModuleType;

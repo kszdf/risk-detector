@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   LightbulbIcon, FileTextIcon, VideoIcon, BarChartIcon, UsersIcon,
-  SettingsIcon, BuildingIcon
+  SettingsIcon, BuildingIcon, ShieldIcon
 } from '@/components/icons';
 import TopicsModule from '@/components/TopicsModule';
 import ScriptsModule from '@/components/ScriptsModule';
 import ProductionModule from '@/components/ProductionModule';
 import AnalyticsModule from '@/components/AnalyticsModule';
 import OperationsModule from '@/components/OperationsModule';
+import RiskDetectionModule from '@/components/RiskDetectionModule';
 import { ModuleType, NavItem } from '@/lib/types';
 
 const NAV_ITEMS: NavItem[] = [
@@ -18,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'production', name: '做视频', icon: 'Video', color: 'purple', description: '数字人指引与排程' },
   { id: 'analytics', name: '看数据', icon: 'BarChart', color: 'amber', description: '数据录入与追踪' },
   { id: 'operations', name: '管客户', icon: 'Users', color: 'red', description: '客户档案与话术' },
+  { id: 'risk-detection', name: '风险检测', icon: 'Shield', color: 'cyan', description: '财税风险检测分析' },
 ];
 
 const IconComponents: Record<string, React.FC<{ className?: string; size?: number }>> = {
@@ -26,6 +28,7 @@ const IconComponents: Record<string, React.FC<{ className?: string; size?: numbe
   Video: VideoIcon,
   BarChart: BarChartIcon,
   Users: UsersIcon,
+  Shield: ShieldIcon,
 };
 
 export default function HomePage() {
@@ -63,6 +66,8 @@ export default function HomePage() {
         return <AnalyticsModule />;
       case 'operations':
         return <OperationsModule />;
+      case 'risk-detection':
+        return <RiskDetectionModule />;
       default:
         return <TopicsModule />;
     }
@@ -74,6 +79,7 @@ export default function HomePage() {
     purple: 'module-purple',
     amber: 'module-amber',
     red: 'module-red',
+    cyan: 'text-cyan-400',
   };
 
   return (
@@ -143,7 +149,8 @@ export default function HomePage() {
                       backgroundColor: item.color === 'blue' ? '#3B82F6' : 
                                       item.color === 'green' ? '#10B981' : 
                                       item.color === 'purple' ? '#8B5CF6' : 
-                                      item.color === 'amber' ? '#F59E0B' : '#EF4444'
+                                      item.color === 'amber' ? '#F59E0B' : 
+                                      item.color === 'red' ? '#EF4444' : '#06B6D4'
                     }} />
                   )}
                 </button>
