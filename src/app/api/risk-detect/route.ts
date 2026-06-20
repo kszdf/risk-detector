@@ -32,49 +32,6 @@ async function getTenantAccessToken(): Promise<string | null> {
   }
 }
 
-// 飞书字段映射
-const FIELD_MAPPING: Record<string, string> = {
-  // 基本信息
-  enterpriseName: 'fldvtGbzTw',
-  contactPerson: 'fldDmFzcrS',
-  contactPhone: 'fld9tVuKCg',
-  customerEmail: 'fldzMHwrOx',
-  industry: 'fldEJGmwE3j',
-  detectionYear: 'fldRczwc3M',
-  
-  // 财务数据
-  revenue: 'fldnGpi9xP',
-  cost: 'fldKE4WxYW',
-  profit: 'fldu4oDvq1F',
-  vat: 'fldihKYTi9',
-  cit: 'fldMGJYFGVW',
-  totalAssets: 'fldjSqFYn4',
-  totalLiabilities: 'fldm4aFcvz',
-  receivables: 'fld6yB2IcV',
-  inventory: 'fldF9DfiOU',
-  advancePayment: 'fldvx6FQS0',
-  
-  // 财务指标
-  vatRate: 'fldfMvRzHf',
-  citRate: 'fldkFzR2yn',
-  grossMargin: 'fldveWv3mZ',
-  netMargin: 'fldWE4GXcY',
-  debtRatio: 'fldCwtB2qe',
-  
-  // 报告信息
-  detectionId: 'fld1iQgWrA',
-  detectionTime: 'fldUVMDjFx',
-  reportStatus: 'fldCrKtkRY',
-  riskLevel: 'fldTmZbU3f',
-  
-  // 风险详情
-  generalRiskResults: 'fldRvw5LGx',
-  industryRiskResults: 'fld8iYaf4u',
-  riskDetails: 'fldp2QI5qf',
-  teacherComment: 'fldKk7gVgv',
-  reportSentTime: 'fldq2b1GKt',
-};
-
 // 生成检测ID
 function generateDetectionId(): string {
   const now = new Date();
@@ -115,42 +72,47 @@ export async function POST(request: NextRequest) {
     const detectionId = generateDetectionId();
     const detectionTime = new Date().toISOString();
     
-    // 构建飞书多维表格字段数据
+    // 构建飞书多维表格字段数据（使用中文字段名）
     const fields: Record<string, any> = {
-      [FIELD_MAPPING.detectionId]: detectionId,
-      [FIELD_MAPPING.detectionTime]: detectionTime,
-      [FIELD_MAPPING.reportStatus]: body.reportStatus || '待审核',
-      [FIELD_MAPPING.enterpriseName]: body.enterpriseName || '',
-      [FIELD_MAPPING.contactPerson]: body.contactPerson || '',
-      [FIELD_MAPPING.contactPhone]: body.contactPhone || '',
-      [FIELD_MAPPING.customerEmail]: body.customerEmail || '',
-      [FIELD_MAPPING.industry]: body.industry || '',
-      [FIELD_MAPPING.detectionYear]: body.detectionYear || new Date().getFullYear().toString(),
+      // 基本信息
+      '企业名称': body.enterpriseName || '',
+      '联系人': body.contactPerson || '',
+      '联系电话': body.contactPhone || '',
+      '客户邮箱': body.customerEmail || '',
+      '所属行业': body.industry || '',
+      '检测年份': body.detectionYear || new Date().getFullYear().toString(),
       
-      // 财务数据
-      [FIELD_MAPPING.revenue]: body.revenue || 0,
-      [FIELD_MAPPING.cost]: body.cost || 0,
-      [FIELD_MAPPING.profit]: body.profit || 0,
-      [FIELD_MAPPING.vat]: body.vat || 0,
-      [FIELD_MAPPING.cit]: body.cit || 0,
-      [FIELD_MAPPING.totalAssets]: body.totalAssets || 0,
-      [FIELD_MAPPING.totalLiabilities]: body.totalLiabilities || 0,
-      [FIELD_MAPPING.receivables]: body.receivables || 0,
-      [FIELD_MAPPING.inventory]: body.inventory || 0,
-      [FIELD_MAPPING.advancePayment]: body.advancePayment || 0,
+      // 财务数据（数值类型）
+      '营业收入(万元)': Number(body.revenue) || 0,
+      '营业成本(万元)': Number(body.cost) || 0,
+      '利润总额(万元)': Number(body.profit) || 0,
+      '实缴增值税(万元)': Number(body.vat) || 0,
+      '实缴所得税(万元)': Number(body.cit) || 0,
+      '总资产(万元)': Number(body.totalAssets) || 0,
+      '总负债(万元)': Number(body.totalLiabilities) || 0,
+      '应收账款(万元)': Number(body.receivables) || 0,
+      '期末存货(万元)': Number(body.inventory) || 0,
+      '预收账款(万元)': Number(body.advancePayment) || 0,
       
-      // 财务指标
-      [FIELD_MAPPING.vatRate]: body.vatRate || 0,
-      [FIELD_MAPPING.citRate]: body.citRate || 0,
-      [FIELD_MAPPING.grossMargin]: body.grossMargin || 0,
-      [FIELD_MAPPING.netMargin]: body.netMargin || 0,
-      [FIELD_MAPPING.debtRatio]: body.debtRatio || 0,
+      // 财务指标（数值类型）
+      '增值税税负率': Number(body.vatRate) || 0,
+      '所得税贡献率': Number(body.citRate) || 0,
+      '毛利率': Number(body.grossMargin) || 0,
+      '净利率': Number(body.netMargin) || 0,
+      '资产负债率': Number(body.debtRatio) || 0,
       
-      // 风险信息
-      [FIELD_MAPPING.riskLevel]: getRiskLevelLabel(body.riskScore || 0),
-      [FIELD_MAPPING.generalRiskResults]: body.generalRiskResults || '{}',
-      [FIELD_MAPPING.industryRiskResults]: body.industryRiskResults || '{}',
-      [FIELD_MAPPING.riskDetails]: body.riskDetails || '',
+      // 报告信息
+      '检测ID': detectionId,
+      '检测时间': detectionTime,
+      '报告状态': body.reportStatus || '待审核',
+      '综合风险等级': getRiskLevelLabel(body.riskScore || 0),
+      
+      // 风险结果（字符串类型）
+      '通用风险结果': body.generalRiskResults || '{}',
+      '行业风险结果': body.industryRiskResults || '{}',
+      '风险项明细': body.riskDetails || '',
+      '张老师批注': '',
+      '报告发送时间': '',
     };
 
     // 写入飞书多维表格
