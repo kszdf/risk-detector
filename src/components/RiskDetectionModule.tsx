@@ -181,6 +181,7 @@ export default function RiskDetectionModule({ standalone = false }: RiskDetectio
   // Step 1: 基本信息
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   
   // Step 2: 财务数据 + 风险问卷
@@ -515,6 +516,19 @@ export default function RiskDetectionModule({ standalone = false }: RiskDetectio
                 </select>
                 <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#94A3B8] pointer-events-none" />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-[#F1F5F9]">
+                联系人 <span className="text-[#94A3B8] font-normal">(选填)</span>
+              </label>
+              <input
+                type="text"
+                value={contactPerson}
+                onChange={e => setContactPerson(e.target.value)}
+                placeholder="您的姓名"
+                className="w-full px-4 py-3 bg-[#161A22] border border-[#2A303C] rounded-lg text-[#F1F5F9] placeholder-[#64748b] focus:border-[#3B82F6] focus:outline-none focus:ring-1 focus:ring-[#3B82F6] transition-all"
+              />
             </div>
 
             <div className="space-y-2">

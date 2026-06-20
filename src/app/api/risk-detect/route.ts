@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
     const fields: Record<string, any> = {
       // 基本信息
       '企业名称': body.enterpriseName || body.companyName || '',
-      '联系人': body.contactPerson || body.contactPhone || '',
-      '联系电话': body.contactPhone || body.contactPerson || '',
+      '联系人': body.contactPerson || '',
+      '联系电话': body.contactPhone || '',
       '客户邮箱': body.customerEmail || '',
       '所属行业': typeof body.industry === 'string' ? body.industry : (body.industry?.text || ''),
       '检测年份': body.detectionYear?.toString() || new Date().getFullYear().toString(),
