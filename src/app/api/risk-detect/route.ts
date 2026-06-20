@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
+    // 调试日志
+    console.log('接收到的数据:', JSON.stringify(body, null, 2));
+    
     // 获取飞书 access_token
     const token = await getTenantAccessToken();
     if (!token) {
@@ -73,14 +76,15 @@ export async function POST(request: NextRequest) {
     const detectionTime = new Date().toISOString();
     
     // 构建飞书多维表格字段数据（使用中文字段名）
+    // 注意：飞书多选字段需要用 { text: '值' } 格式
     const fields: Record<string, any> = {
       // 基本信息
-      '企业名称': body.enterpriseName || '',
-      '联系人': body.contactPerson || '',
-      '联系电话': body.contactPhone || '',
+      '企业名称': body.enterpriseName || body.companyName || '',
+      '联系人': body.contactPerson || body.contactPhone || '',
+      '联系电话': body.contactPhone || body.contactPerson || '',
       '客户邮箱': body.customerEmail || '',
-      '所属行业': body.industry || '',
-      '检测年份': body.detectionYear || new Date().getFullYear().toString(),
+      '所属行业': typeof body.industry === 'string' ? body.industry : (body.industry?.text || ''),
+      '检测年份': body.detectionYear?.toString() || new Date().getFullYear().toString(),
       
       // 财务数据（数值类型）
       '营业收入(万元)': Number(body.revenue) || 0,
@@ -104,8 +108,8 @@ export async function POST(request: NextRequest) {
       // 报告信息
       '检测ID': detectionId,
       '检测时间': detectionTime,
-      '报告状态': body.reportStatus || '待审核',
-      '综合风险等级': getRiskLevelLabel(body.riskScore || 0),
+      '报告状态': typeof body.reportStatus === 'string' ? body.reportStatus : (body.reportStatus?.text || '待审核'),
+      '综合风险等级': typeof body.riskLevel === 'string' ? body.riskLevel : getRiskLevelLabel(body.riskScore || 0),
       
       // 风险结果（字符串类型）
       '通用风险结果': body.generalRiskResults || '{}',
