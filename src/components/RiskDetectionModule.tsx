@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ShieldIcon, AlertTriangleIcon, CheckCircleIcon, XCircleIcon, PhoneIcon, MailIcon, ChevronDownIcon } from '@/components/icons';
+import { ShieldIcon, AlertTriangleIcon, CheckCircleIcon, XCircleIcon, PhoneIcon, MailIcon, ChevronDownIcon, ClipboardIcon } from '@/components/icons';
 
 // 行业列表
 const INDUSTRIES = [
@@ -13,6 +13,77 @@ const INDUSTRIES = [
   '科技·软件',
   '房地产',
 ];
+
+// 行业风险项数据
+const INDUSTRY_RISK_ITEMS: Record<string, Array<{
+  id: string;
+  name: string;
+  type: 'select' | 'number';
+  options?: string[];
+  unit?: string;
+  planLevel: '可筹划' | '需关注' | '需整改';
+}>> = {
+  '商贸批发零售': [
+    { id: 'r1', name: '进销项品名匹配度', type: 'select', options: ['高度匹配', '部分不匹配', '明显不匹配'], planLevel: '需整改' },
+    { id: 'r2', name: '私户收款情况', type: 'select', options: ['无', '偶有', '常见'], planLevel: '需整改' },
+    { id: 'r3', name: '存货周转天数', type: 'number', unit: '天', planLevel: '需关注' },
+    { id: 'r4', name: '未开票收入是否申报', type: 'select', options: ['全部申报', '部分申报', '未申报'], planLevel: '需整改' },
+    { id: 'r5', name: '供应商小规模纳税人占比', type: 'number', unit: '%', planLevel: '可筹划' },
+    { id: 'r6', name: '采购渠道规范性', type: 'select', options: ['全部规范', '部分不规范', '大量无票采购'], planLevel: '可筹划' },
+  ],
+  '建筑工程': [
+    { id: 'r1', name: '人工成本占总成本比例', type: 'number', unit: '%', planLevel: '需关注' },
+    { id: 'r2', name: '农民工工资发放方式', type: 'select', options: ['专户代发', '现金发放', '包工头代发'], planLevel: '可筹划' },
+    { id: 'r3', name: '异地项目是否合规预缴', type: 'select', options: ['全部合规预缴', '部分未预缴', '未预缴'], planLevel: '需整改' },
+    { id: 'r4', name: '分包抵扣占总进项比例', type: 'number', unit: '%', planLevel: '需关注' },
+    { id: 'r5', name: '甲供材/清包工项目计税方式', type: 'select', options: ['合理选择', '未选择', '不清楚'], planLevel: '可筹划' },
+    { id: 'r6', name: '项目收入确认时点', type: 'select', options: ['按完工进度', '按开票时点', '按收款时点'], planLevel: '可筹划' },
+    { id: 'r7', name: '材料采购有无白条入账', type: 'select', options: ['无', '少量', '较多'], planLevel: '需整改' },
+  ],
+  '制造业': [
+    { id: 'r1', name: '存货与收入增长是否匹配', type: 'select', options: ['同步增长', '存货增速远超收入', '收入增存货降'], planLevel: '需关注' },
+    { id: 'r2', name: '研发费用加计扣除', type: 'select', options: ['正常享受', '突增300%以上', '未享受'], planLevel: '可筹划' },
+    { id: 'r3', name: '废料/副产品收入是否申报', type: 'select', options: ['全部申报', '部分申报', '未申报'], planLevel: '需整改' },
+    { id: 'r4', name: '固定资产折旧方式', type: 'select', options: ['直线法', '加速折旧', '未规范'], planLevel: '可筹划' },
+    { id: 'r5', name: '委托加工还是自产', type: 'select', options: ['全部自产', '部分委托', '大量委托'], planLevel: '可筹划' },
+    { id: 'r6', name: '原材料采购发票合规率', type: 'number', unit: '%', planLevel: '需整改' },
+    { id: 'r7', name: '仓库账实是否相符', type: 'select', options: ['相符', '略有差异', '差异较大'], planLevel: '需整改' },
+  ],
+  '餐饮住宿': [
+    { id: 'r1', name: '食材采购发票获取率', type: 'number', unit: '%', planLevel: '可筹划' },
+    { id: 'r2', name: '会员卡/预付卡税务处理', type: 'select', options: ['规范处理', '未按期确认收入', '未处理'], planLevel: '可筹划' },
+    { id: 'r3', name: '房租是否取得合规发票', type: 'select', options: ['全部有票', '部分无票', '全部无票'], planLevel: '可筹划' },
+    { id: 'r4', name: '连锁/多店核算是否独立', type: 'select', options: ['独立核算', '混合核算'], planLevel: '可筹划' },
+    { id: 'r5', name: '外卖平台流水与申报收入差异', type: 'select', options: ['基本一致', '差异10%以上', '差异30%以上'], planLevel: '需整改' },
+    { id: 'r6', name: '员工餐/试菜成本是否单独核算', type: 'select', options: ['单独核算', '混入经营成本'], planLevel: '需关注' },
+  ],
+  '服务业·咨询': [
+    { id: 'r1', name: '人工成本占总成本比例', type: 'number', unit: '%', planLevel: '需关注' },
+    { id: 'r2', name: '差旅费/业务招待费占收入比', type: 'number', unit: '%', planLevel: '可筹划' },
+    { id: 'r3', name: '关联交易比例', type: 'number', unit: '%', planLevel: '可筹划' },
+    { id: 'r4', name: '服务费列支是否有真实业务支撑', type: 'select', options: ['全部有', '部分存疑', '大量无业务'], planLevel: '需整改' },
+    { id: 'r5', name: '咨询费/劳务费是否代扣代缴个税', type: 'select', options: ['全部代扣', '部分遗漏', '未代扣'], planLevel: '需整改' },
+    { id: 'r6', name: '高管薪酬结构', type: 'select', options: ['全部工资', '工资+绩效', '多样结构'], planLevel: '可筹划' },
+  ],
+  '科技·软件': [
+    { id: 'r1', name: '软硬件收入是否分开核算', type: 'select', options: ['严格分开', '部分混同', '未分开'], planLevel: '可筹划' },
+    { id: 'r2', name: '增值税即征即退是否合规享受', type: 'select', options: ['正常享受', '未享受', '不确定'], planLevel: '可筹划' },
+    { id: 'r3', name: '研发费用突增比例', type: 'number', unit: '%', planLevel: '可筹划' },
+    { id: 'r4', name: '技术转让收入是否享免税', type: 'select', options: ['合规享受', '未享受', '不适用'], planLevel: '可筹划' },
+    { id: 'r5', name: '高新/双软资质是否有效维护', type: 'select', options: ['有效', '即将到期', '已失效'], planLevel: '可筹划' },
+    { id: 'r6', name: '外包开发费用是否取得合规发票', type: 'select', options: ['全部合规', '部分不合规'], planLevel: '需关注' },
+    { id: 'r7', name: '人力成本占比', type: 'number', unit: '%', planLevel: '需关注' },
+  ],
+  '房地产': [
+    { id: 'r1', name: '预售与清算阶段税负差异', type: 'select', options: ['正常过渡', '长期预缴不清算', '不清楚'], planLevel: '可筹划' },
+    { id: 'r2', name: '土地成本抵减销售额是否合规', type: 'select', options: ['合规', '不确定', '未抵减'], planLevel: '可筹划' },
+    { id: 'r3', name: '增值税预缴及时性', type: 'select', options: ['按期预缴', '偶有延迟', '经常延迟'], planLevel: '需整改' },
+    { id: 'r4', name: '成本分摊方法', type: 'select', options: ['建筑面积法', '层高系数法', '其他'], planLevel: '可筹划' },
+    { id: 'r5', name: '车位/储藏室税务处理', type: 'select', options: ['规范处理', '未单独核算'], planLevel: '可筹划' },
+    { id: 'r6', name: '甲供材是否选择简易计税', type: 'select', options: ['合理选择', '未选择', '不清楚'], planLevel: '可筹划' },
+    { id: 'r7', name: '项目公司注销前税务清算', type: 'select', options: ['已清算', '正在清算', '未清算'], planLevel: '需整改' },
+  ],
+};
 
 // 行业基准数据
 const INDUSTRY_BENCHMARKS: Record<string, Record<string, { min: number; max: number; warning: number; label: string }>> = {
@@ -89,12 +160,24 @@ interface IndicatorResult {
   description: string;
 }
 
+interface QuestionnaireResult {
+  id: string;
+  name: string;
+  value: string;
+  numberValue?: number;
+  riskLevel: 'green' | 'yellow' | 'red';
+  planLevel: '可筹划' | '需关注' | '需整改';
+}
+
 interface RiskResult {
   overallLevel: 'low' | 'medium' | 'high' | 'extreme';
   indicators: IndicatorResult[];
+  questionnaireResults: QuestionnaireResult[];
   crossWarnings: string[];
   redCount: number;
   blackCount: number;
+  planCount: number;
+  totalScore: number;
 }
 
 const RISK_COLORS = {
@@ -102,6 +185,12 @@ const RISK_COLORS = {
   yellow: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30', label: '中风险' },
   red: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30', label: '高风险' },
   black: { bg: 'bg-gray-800/50', text: 'text-gray-300', border: 'border-gray-600/30', label: '极高风险' },
+};
+
+const PLAN_LEVEL_COLORS = {
+  '可筹划': { bg: 'bg-green-500/20', text: 'text-green-400' },
+  '需关注': { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
+  '需整改': { bg: 'bg-red-500/20', text: 'text-red-400' },
 };
 
 const OVERALL_COLORS = {
@@ -127,10 +216,17 @@ export default function RiskDetectionModule() {
     { year: String(currentYear), revenue: '', cost: '', profit: '', vat: '', incomeTax: '', totalAssets: '', totalLiabilities: '' },
   ]);
 
+  // 问卷答案状态
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<Record<string, string>>({});
+
   const [result, setResult] = useState<RiskResult | null>(null);
 
   const updateYearData = (index: number, field: keyof YearData, value: string) => {
     setYearData(prev => prev.map((y, i) => i === index ? { ...y, [field]: value } : y));
+  };
+
+  const updateQuestionnaireAnswer = (id: string, value: string) => {
+    setQuestionnaireAnswers(prev => ({ ...prev, [id]: value }));
   };
 
   // 计算指标
@@ -147,7 +243,6 @@ export default function RiskDetectionModule() {
     const { min, max, warning } = benchmark;
 
     if (higherIsRisky) {
-      // 资产负债率：高于上限才危险
       if (value > max * 1.3) {
         riskLevel = 'black';
         deviation = `高于行业上限${((value - max) / max * 100).toFixed(0)}%`;
@@ -166,7 +261,6 @@ export default function RiskDetectionModule() {
         description = '资产负债率处于行业健康区间';
       }
     } else {
-      // 正常指标：过低危险
       const mid = (min + max) / 2;
       const deviationPercent = mid > 0 ? ((value - mid) / mid * 100).toFixed(0) : 0;
 
@@ -202,6 +296,37 @@ export default function RiskDetectionModule() {
     }
 
     return { name, value, benchmarkMin: min, benchmarkMax: max, benchmarkWarning: warning, riskLevel, deviation, description };
+  };
+
+  // 计算问卷结果
+  const calculateQuestionnaireResults = (): QuestionnaireResult[] => {
+    const items = INDUSTRY_RISK_ITEMS[industry] || [];
+    return items.map(item => {
+      const answer = questionnaireAnswers[item.id];
+      let riskLevel: 'green' | 'yellow' | 'red' = 'green';
+
+      if (item.type === 'select' && item.options && answer) {
+        const optionIndex = item.options.indexOf(answer);
+        // 最后一个选项 = 高风险，中间 = 中风险，第一个 = 低风险
+        if (optionIndex === item.options.length - 1) {
+          riskLevel = 'red';
+        } else if (optionIndex > 0 && optionIndex < item.options.length - 1) {
+          riskLevel = 'yellow';
+        }
+      } else if (item.type === 'number' && answer) {
+        // 数字类型需要根据具体指标判断，暂时绿色
+        riskLevel = 'green';
+      }
+
+      return {
+        id: item.id,
+        name: item.name,
+        value: answer || '',
+        numberValue: answer ? parseFloat(answer) : undefined,
+        riskLevel,
+        planLevel: item.planLevel,
+      };
+    });
   };
 
   // 检测结果
@@ -279,7 +404,6 @@ export default function RiskDetectionModule() {
     // 多年度趋势预警
     const validYears = yearData.filter(y => y.revenue && parseFloat(y.revenue) > 0);
     if (validYears.length >= 2) {
-      // 检查毛利率趋势
       const margins = validYears.map(y => {
         const rev = parseFloat(y.revenue);
         const cst = parseFloat(y.cost);
@@ -291,24 +415,43 @@ export default function RiskDetectionModule() {
       }
     }
 
-    // 综合等级
+    // 问卷结果
+    const questionnaireResults = calculateQuestionnaireResults();
+    let planCount = 0;
+
+    // 统计问卷中的高风险项
+    questionnaireResults.forEach(q => {
+      if (q.riskLevel === 'red') {
+        if (q.planLevel === '需整改') {
+          redCount += 1;
+        } else if (q.planLevel === '可筹划') {
+          redCount += 0.5; // 可筹划项的高风险权重较低
+          planCount++;
+        } else {
+          redCount += 0.5;
+        }
+      }
+    });
+
+    // 综合等级计算
+    const totalScore = blackCount * 2 + redCount;
     let overallLevel: 'low' | 'medium' | 'high' | 'extreme' = 'low';
-    if (blackCount >= 2 || blackCount >= 1 && redCount >= 2) {
+    if (totalScore > 4) {
       overallLevel = 'extreme';
-    } else if (redCount >= 3 || blackCount >= 1) {
+    } else if (totalScore > 2) {
       overallLevel = 'high';
-    } else if (redCount >= 1 || blackCount >= 1) {
+    } else if (totalScore > 0) {
       overallLevel = 'medium';
     }
 
-    return { overallLevel, indicators, crossWarnings, redCount, blackCount };
+    return { overallLevel, indicators, questionnaireResults, crossWarnings, redCount, blackCount, planCount, totalScore };
   };
 
   const handleDetect = () => {
     const riskResult = detectRisks();
     setResult(riskResult);
     if (riskResult) {
-      setStep(3);
+      setStep(4);
     }
   };
 
@@ -322,6 +465,10 @@ export default function RiskDetectionModule() {
 
   const canProceedStep2 = yearData.some(y => y.revenue && y.cost && y.profit && y.vat && y.incomeTax);
 
+  const currentRiskItems = useMemo(() => {
+    return INDUSTRY_RISK_ITEMS[industry] || [];
+  }, [industry]);
+
   const getLightIcon = (level: string) => {
     switch (level) {
       case 'green': return <CheckCircleIcon className="w-5 h-5 text-green-400" />;
@@ -330,6 +477,18 @@ export default function RiskDetectionModule() {
       case 'black': return <XCircleIcon className="w-5 h-5 text-gray-400" />;
       default: return null;
     }
+  };
+
+  const getQuestionnaireRiskLevel = (itemId: string) => {
+    const item = currentRiskItems.find(i => i.id === itemId);
+    const answer = questionnaireAnswers[itemId];
+    
+    if (!answer || !item || item.type !== 'select' || !item.options) return 'green';
+    
+    const optionIndex = item.options.indexOf(answer);
+    if (optionIndex === item.options.length - 1) return 'red';
+    if (optionIndex > 0) return 'yellow';
+    return 'green';
   };
 
   return (
@@ -355,20 +514,31 @@ export default function RiskDetectionModule() {
         </div>
       </div>
 
-      {/* 步骤指示器 */}
-      <div className="flex items-center gap-4 mb-6">
-        {['基本信息', '财务数据', '检测结果'].map((s, i) => (
-          <div key={s} className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-              step > i + 1 ? 'bg-green-500/20 text-green-400' :
-              step === i + 1 ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' :
-              'bg-[#161A22] text-[#64748B]'
-            }`}>
-              {step > i + 1 ? '✓' : i + 1}
-            </div>
-            <span className={`text-sm ${step >= i + 1 ? 'text-[#F1F5F9]' : 'text-[#64748B]'}`}>{s}</span>
-            {i < 2 && <div className={`w-12 h-0.5 ${step > i + 1 ? 'bg-green-500' : 'bg-[#2A303C]'}`} />}
-          </div>
+      {/* 步骤指示器 - 4步 */}
+      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+        {['基本信息', '财务数据', '行业问卷', '检测结果'].map((s, i) => (
+          <React.Fragment key={s}>
+            <button
+              onClick={() => i < step - 1 && setStep(i + 1)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                step > i + 1 
+                  ? 'bg-green-500/20 text-green-400 cursor-pointer hover:bg-green-500/30' 
+                  : step === i + 1 
+                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' 
+                    : 'bg-[#161A22] text-[#64748B] cursor-default'
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                step > i + 1 ? 'bg-green-500/30' : step === i + 1 ? 'bg-blue-500/30' : 'bg-[#2A303C]'
+              }`}>
+                {step > i + 1 ? '✓' : i + 1}
+              </div>
+              <span className="text-sm whitespace-nowrap">{s}</span>
+            </button>
+            {i < 3 && (
+              <div className={`w-8 h-0.5 flex-shrink-0 ${step > i + 1 ? 'bg-green-500' : 'bg-[#2A303C]'}`} />
+            )}
+          </React.Fragment>
         ))}
       </div>
 
@@ -560,9 +730,110 @@ export default function RiskDetectionModule() {
               上一步
             </button>
             <button
-              onClick={handleDetect}
+              onClick={() => setStep(3)}
               disabled={!canProceedStep2}
               className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-sm font-medium"
+            >
+              下一步：行业问卷
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 步骤3：行业风险问卷 */}
+      {step === 3 && expanded && (
+        <div className="bg-[#161A22] border border-[#2A303C] rounded-xl p-6">
+          <h3 className="text-base font-semibold text-[#F1F5F9] mb-2">第三步：行业风险问卷</h3>
+          <p className="text-sm text-[#94A3B8] mb-6">
+            根据您选择的行业「{industry}」，请回答以下{currentRiskItems.length}个专属风险问题
+          </p>
+          
+          <div className="space-y-4">
+            {currentRiskItems.map((item, index) => {
+              const riskLevel = getQuestionnaireRiskLevel(item.id);
+              const answer = questionnaireAnswers[item.id];
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className={`bg-[#0D0F14] rounded-xl p-4 border transition-colors ${
+                    riskLevel === 'red' ? 'border-red-500/50' :
+                    riskLevel === 'yellow' ? 'border-yellow-500/50' :
+                    answer ? 'border-green-500/30' : 'border-[#2A303C]'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[#64748B] bg-[#2A303C] px-2 py-0.5 rounded">{index + 1}</span>
+                      <span className="text-sm text-[#F1F5F9]">{item.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 text-xs rounded ${PLAN_LEVEL_COLORS[item.planLevel].bg} ${PLAN_LEVEL_COLORS[item.planLevel].text}`}>
+                      {item.planLevel === '可筹划' ? '🟢' : item.planLevel === '需关注' ? '🟡' : '🔴'} {item.planLevel}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {item.type === 'select' && item.options ? (
+                      <select
+                        value={answer || ''}
+                        onChange={e => updateQuestionnaireAnswer(item.id, e.target.value)}
+                        className={`flex-1 bg-[#161A22] border rounded-lg px-3 py-2 text-sm text-[#F1F5F9] ${
+                          riskLevel === 'red' ? 'border-red-500/50' :
+                          riskLevel === 'yellow' ? 'border-yellow-500/50' :
+                          'border-[#2A303C]'
+                        }`}
+                      >
+                        <option value="">请选择</option>
+                        {item.options.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="flex-1 relative">
+                        <input
+                          type="number"
+                          value={answer || ''}
+                          onChange={e => updateQuestionnaireAnswer(item.id, e.target.value)}
+                          placeholder={`请输入${item.unit || ''}`}
+                          className="w-full bg-[#161A22] border border-[#2A303C] rounded-lg px-3 py-2 text-sm text-[#F1F5F9] placeholder-[#64748B]"
+                        />
+                        {item.unit && (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#64748B]">{item.unit}</span>
+                        )}
+                      </div>
+                    )}
+                    
+                    {answer && (
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        riskLevel === 'red' ? 'bg-red-500/20' :
+                        riskLevel === 'yellow' ? 'bg-yellow-500/20' :
+                        'bg-green-500/20'
+                      }`}>
+                        {riskLevel === 'red' ? (
+                          <XCircleIcon className="w-5 h-5 text-red-400" />
+                        ) : riskLevel === 'yellow' ? (
+                          <AlertTriangleIcon className="w-5 h-5 text-yellow-400" />
+                        ) : (
+                          <CheckCircleIcon className="w-5 h-5 text-green-400" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between mt-6">
+            <button
+              onClick={() => setStep(2)}
+              className="px-6 py-2.5 border border-[#2A303C] text-[#94A3B8] rounded-lg hover:bg-[#2A303C]/50 transition-colors text-sm"
+            >
+              上一步
+            </button>
+            <button
+              onClick={handleDetect}
+              className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
             >
               开始检测
             </button>
@@ -570,8 +841,8 @@ export default function RiskDetectionModule() {
         </div>
       )}
 
-      {/* 步骤3：检测结果 */}
-      {step === 3 && result && expanded && (
+      {/* 步骤4：检测结果 */}
+      {step === 4 && result && expanded && (
         <div className="space-y-6">
           {/* 综合风险等级 */}
           <div className={`bg-gradient-to-br ${OVERALL_COLORS[result.overallLevel].bg} border border-[#2A303C] rounded-xl p-6 text-center`}>
@@ -630,6 +901,59 @@ export default function RiskDetectionModule() {
             ))}
           </div>
 
+          {/* 行业风险问卷结果 */}
+          {result.questionnaireResults.length > 0 && (
+            <div className="bg-[#161A22] border border-[#2A303C] rounded-xl p-4">
+              <h4 className="text-sm font-medium text-[#F1F5F9] mb-4 flex items-center gap-2">
+                <ClipboardIcon className="w-4 h-4 text-[#3B82F6]" />
+                行业风险问卷结果 ({industry})
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {result.questionnaireResults.map((q, index) => (
+                  <div 
+                    key={q.id}
+                    className={`bg-[#0D0F14] rounded-lg p-3 border ${
+                      q.riskLevel === 'red' ? 'border-red-500/50' :
+                      q.riskLevel === 'yellow' ? 'border-yellow-500/50' :
+                      'border-[#2A303C]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-[#64748B]">{index + 1}. {q.name}</span>
+                      <span className={`px-2 py-0.5 text-xs rounded ${PLAN_LEVEL_COLORS[q.planLevel].bg} ${PLAN_LEVEL_COLORS[q.planLevel].text}`}>
+                        {q.planLevel === '可筹划' ? '🟢' : q.planLevel === '需关注' ? '🟡' : '🔴'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm ${
+                        q.riskLevel === 'red' ? 'text-red-400' :
+                        q.riskLevel === 'yellow' ? 'text-yellow-400' :
+                        'text-[#F1F5F9]'
+                      }`}>
+                        {q.value || '未填写'}
+                      </span>
+                      {q.value && (
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center ml-auto ${
+                          q.riskLevel === 'red' ? 'bg-red-500/20' :
+                          q.riskLevel === 'yellow' ? 'bg-yellow-500/20' :
+                          'bg-green-500/20'
+                        }`}>
+                          {q.riskLevel === 'red' ? (
+                            <XCircleIcon className="w-3 h-3 text-red-400" />
+                          ) : q.riskLevel === 'yellow' ? (
+                            <AlertTriangleIcon className="w-3 h-3 text-yellow-400" />
+                          ) : (
+                            <CheckCircleIcon className="w-3 h-3 text-green-400" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 交叉预警 */}
           {result.crossWarnings.length > 0 && (
             <div className="bg-[#161A22] border border-[#F59E0B]/30 rounded-xl p-4">
@@ -641,6 +965,31 @@ export default function RiskDetectionModule() {
               </ul>
             </div>
           )}
+
+          {/* 风险统计摘要 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-[#161A22] border border-green-500/30 rounded-xl p-4">
+              <div className="text-2xl font-bold text-green-400 mb-1">
+                {result.questionnaireResults.filter(q => q.planLevel === '可筹划' && q.riskLevel === 'red').length}
+              </div>
+              <div className="text-sm text-[#94A3B8]">可筹划风险项</div>
+              <div className="text-xs text-[#64748B] mt-1">可通过税务筹划优化</div>
+            </div>
+            <div className="bg-[#161A22] border border-red-500/30 rounded-xl p-4">
+              <div className="text-2xl font-bold text-red-400 mb-1">
+                {result.questionnaireResults.filter(q => q.planLevel === '需整改' && q.riskLevel === 'red').length + result.indicators.filter(i => i.riskLevel === 'red' || i.riskLevel === 'black').length}
+              </div>
+              <div className="text-sm text-[#94A3B8]">需整改风险项</div>
+              <div className="text-xs text-[#64748B] mt-1">稽查概率较高，需立即整改</div>
+            </div>
+            <div className="bg-[#161A22] border border-[#2A303C] rounded-xl p-4">
+              <div className="text-2xl font-bold text-[#F1F5F9] mb-1">
+                {result.questionnaireResults.length}
+              </div>
+              <div className="text-sm text-[#94A3B8]">问卷总项数</div>
+              <div className="text-xs text-[#64748B] mt-1">已填写{result.questionnaireResults.filter(q => q.value).length}项</div>
+            </div>
+          </div>
 
           {/* 风险项明细 */}
           {(result.redCount > 0 || result.blackCount > 0) && (
@@ -658,6 +1007,15 @@ export default function RiskDetectionModule() {
                     </div>
                   </li>
                 ))}
+                {result.questionnaireResults.filter(q => q.riskLevel === 'red').map((q, index) => (
+                  <li key={`q-${index}`} className="flex items-start gap-2 text-sm">
+                    <span className="text-red-400 mt-0.5">🟠</span>
+                    <div>
+                      <span className="text-[#F1F5F9]">{q.name}：</span>
+                      <span className="text-[#94A3B8]">选择「{q.value}」{q.planLevel === '需整改' ? '，需立即整改' : '，可优化'}</span>
+                    </div>
+                  </li>
+                ))}
               </ul>
             </div>
           )}
@@ -665,8 +1023,8 @@ export default function RiskDetectionModule() {
           {/* CTA */}
           <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-6">
             <div className="text-center mb-4">
-              <h4 className="text-lg font-semibold text-[#F1F5F9] mb-2">获取完整风险检测报告</h4>
-              <p className="text-sm text-[#94A3B8]">专业财税顾问一对一解读，提供整改建议</p>
+              <h4 className="text-lg font-semibold text-[#F1F5F9] mb-2">获取筹划方案 + 完整检测报告</h4>
+              <p className="text-sm text-[#94A3B8]">专业财税顾问一对一解读，提供整改建议与优化方案</p>
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -690,10 +1048,10 @@ export default function RiskDetectionModule() {
 
           <div className="flex justify-between">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="px-6 py-2.5 border border-[#2A303C] text-[#94A3B8] rounded-lg hover:bg-[#2A303C]/50 transition-colors text-sm"
             >
-              修改数据
+              修改问卷
             </button>
             <button
               onClick={() => setExpanded(false)}
