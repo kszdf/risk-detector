@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   ShieldIcon,
@@ -170,7 +171,11 @@ interface RiskQuestionAnswer {
   riskLevel: 'low' | 'medium' | 'high' | null;
 }
 
-export default function RiskDetectionModule() {
+interface RiskDetectionModuleProps {
+  standalone?: boolean;
+}
+
+export default function RiskDetectionModule({ standalone = false }: RiskDetectionModuleProps) {
   const [step, setStep] = useState(1);
   
   // Step 1: 基本信息
@@ -425,14 +430,24 @@ export default function RiskDetectionModule() {
     <div className="h-full flex flex-col bg-[#0D0F14]">
       {/* Header */}
       <div className="p-6 border-b border-[#2A303C]">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center">
-            <ShieldIcon className="w-5 h-5 text-white" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center">
+              <ShieldIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#F1F5F9]">税务风险智能检测</h2>
+              <p className="text-xs text-[#94A3B8]">6分钟完成 · 基于《智控征管》预警模型</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-[#F1F5F9]">税务风险智能检测</h2>
-            <p className="text-xs text-[#94A3B8]">6分钟完成 · 基于《智控征管》预警模型</p>
-          </div>
+          {standalone && (
+            <Link
+              href="/"
+              className="text-sm text-[#94A3B8] hover:text-[#F1F5F9] transition-colors"
+            >
+              返回工作台
+            </Link>
+          )}
         </div>
 
         {/* 步骤指示器 */}
