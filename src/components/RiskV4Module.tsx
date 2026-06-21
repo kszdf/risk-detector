@@ -1,324 +1,694 @@
-'use client';
+'use client'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Loader2, CheckCircle, AlertCircle, ArrowRight, ArrowDown, TrendingUp, TrendingDown, Info } from 'lucide-react'
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import BasicInfoStep from './steps/BasicInfoStep';
-import QuestionnaireStep from './steps/QuestionnaireStep';
-import FinancialDataStep from './steps/FinancialDataStep';
-import ResultStep from './steps/ResultStep';
-
-// ============== 类型定义 ==============
+// ============ 类型定义 ============
 interface FinancialPeriod {
-  period: string;
-  type: 'latest' | 'annual';
-  revenue: number;
-  cost: number;
-  profit: number;
-  vatPaid: number;
-  incomeTaxPaid: number;
-  totalAssets: number;
-  totalLiabilities: number;
-  receivables: number;
-  inventory: number;
-  advanceReceipts: number;
+  period: string
+  type: 'latest' | 'annual'
+  revenue: string
+  cost: string
+  profit: string
+  vatPaid: string
+  incomeTaxPaid: string
+  totalAssets: string
+  totalLiabilities: string
+  receivables: string
+  inventory: string
+  advanceReceipts: string
 }
 
 interface FormData {
-  enterpriseName: string;
-  contactPerson: string;
-  contactPhone: string;
-  customerEmail: string;
-  industry: string;
-  revenueScale: string;
-  invoiceAnswers: Record<string, number>;
-  revenueCostAnswers: Record<string, number>;
-  publicPrivateAnswers: Record<string, number>;
-  taxPolicyAnswers: Record<string, number>;
-  latestMonth: string;
-  financialData: FinancialPeriod[];
+  enterpriseName: string
+  contactPerson: string
+  contactPhone: string
+  customerEmail: string
+  industry: string
+  revenueScale: string
+  invoiceAnswers: Record<string, number>
+  revenueAnswers: Record<string, number>
+  publicPrivateAnswers: Record<string, number>
+  taxAnswers: Record<string, number>
+  financialData: FinancialPeriod[]
+  latestMonth: string
+}
+
+interface RiskItem {
+  module: string
+  category: string
+  item: string
+  score: number
+  weight: number
+  maxScore: number
+  actualValue: string
+  threshold: string
+  description: string
+}
+
+interface CrossValidation {
+  type: string
+  ratio: string
+  benchmark: string
+  status: '正常' | '异常'
+  score: number
+}
+
+interface TrendWarning {
+  type: string
+  current: string
+  previous: string
+  change: string
+  score: number
 }
 
 interface ResultData {
-  riskId: string;
-  overallRiskLevel: string;
-  riskScore: number;
-  maxScore: number;
-  riskDetails: string[];
-  moduleScores: { invoice: number; revenueCost: number; publicPrivate: number; taxPolicy: number };
-  weightedScores: { invoice: number; revenueCost: number; publicPrivate: number; taxPolicy: number };
-  trendWarnings: Array<{ type: string; label: string; score: number; detail: string }>;
-  trendData: Array<{ period: string; revenue: number; grossMargin: number; netMargin: number; vatRate: number; citRate: number; debtRatio: number; trends: Record<string, string> }>;
-  crossValidation: Array<{ rule: string; conflict: boolean; detail: string }>;
-  estimatedRiskAmount: { items: Array<{ name: string; taxMin: number; taxMax: number; penaltyMin: number; penaltyMax: number }>; totalTaxMin: number; totalTaxMax: number; totalPenaltyMin: number; totalPenaltyMax: number; totalMin: number; totalMax: number } | null;
-  dataCompletenessMsg: string;
+  enterpriseName: string
+  detectionTime: string
+  period: string
+  riskScore: number
+  maxScore: number
+  riskLevel: '低风险' | '中风险' | '高风险' | '极高风险'
+  weightedScores: Record<string, number>
+  riskItems: RiskItem[]
+  crossValidations: CrossValidation[]
+  trendWarnings: TrendWarning[]
+  estimatedRiskAmount: number
+  riskLevelDescription: string
+  improvementSuggestions: string[]
+  dataCompleteness: string
+  reportContent: string
 }
 
-// ============== 问卷题目配置 ==============
-const INVOICE_QUESTIONS = [
-  { id: 'q1', question: '发票流、资金流、合同流、货（服务）流是否完全一致？', options: ['完全一致', '部分不一致', '经常不一致'], scores: [0, 2, 3] },
-  { id: 'q2', question: '是否存在用个人账户收取公司营业款未入账？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'q3', question: '近12个月是否接受过"变名发票"？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'q4', question: '增值税进项发票是否出现过上游供应商异常？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'q5', question: '红字发票开具比例是否超过5%？', options: ['未超过', '5%-15%', '超过15%'], scores: [0, 2, 3] }
-];
+// ============ 安全工具函数 ============
+const safeGetYearOptions = (): number[] => {
+  try {
+    const now = new Date()
+    return [now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3]
+  } catch { return [2025, 2024, 2023] }
+}
 
-const REVENUE_COST_QUESTIONS = [
-  { id: 'r1', question: '是否存在预收账款长期挂账未确认收入？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'r2', question: '是否存在"替票"冲账？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'r3', question: '股东或家人个人消费是否计入公司费用？', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'r4', question: '存货账面与实际盘点差异？', options: ['基本一致', '有差异但有合理解释', '差异较大'], scores: [0, 2, 3] },
-  { id: 'r5', question: '最近一年利润总额是否为负？', options: ['否', '是'], scores: [0, 2] }
-];
+const safeGetDefaultLatestMonth = (): string => {
+  try {
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const defaultMonth = month >= 3 ? month - 2 : 12 + month - 2
+    return `${now.getFullYear()}-${String(defaultMonth).padStart(2, '0')}`
+  } catch { return '2026-04' }
+}
+
+const safeCreateEmptyPeriod = (period: string, type: 'latest' | 'annual'): FinancialPeriod => ({
+  period, type, revenue: '', cost: '', profit: '', vatPaid: '', incomeTaxPaid: '',
+  totalAssets: '', totalLiabilities: '', receivables: '', inventory: '', advanceReceipts: ''
+})
+
+// ============ 步骤定义（6步） ============
+const STEPS = [
+  { id: 'basic', label: '基本信息', module: 'basic' },
+  { id: 'invoice', label: '发票与资金流', module: 'invoice' },
+  { id: 'revenue', label: '收入与成本', module: 'revenue' },
+  { id: 'publicPrivate', label: '公私账户', module: 'publicPrivate' },
+  { id: 'tax', label: '税务申报', module: 'tax' },
+  { id: 'financial', label: '财务数据', module: 'financial' },
+]
+
+// ============ 问卷题目 ============
+const INVOICE_QUESTIONS = [
+  { id: 'inv1', question: '1. 进货发票的索取情况', options: [{ text: '全部依法开具', score: 10 }, { text: '大部分有发票', score: 7 }, { text: '只有进项发票', score: 4 }, { text: '无正规发票', score: 0 }] },
+  { text: '2. 进货渠道的发票合规性', options: [{ text: '从一般纳税人采购', score: 10 }, { text: '从有资质供应商采购', score: 7 }, { text: '有部分无票渠道', score: 4 }, { text: '大量无票采购', score: 0 }] },
+  { id: 'inv3', question: '3. 发票入账的及时性', options: [{ text: '当月发票当月入账', score: 10 }, { text: '偶尔跨期', score: 7 }, { text: '经常跨期', score: 4 }, { text: '长期滞留未入账', score: 0 }] },
+  { id: 'inv4', question: '4. 销项发票的开具情况', options: [{ text: '全部依法开具', score: 10 }, { text: '大部分依法开具', score: 7 }, { text: '存在滞后开具', score: 4 }, { text: '账外经营', score: 0 }] },
+  { id: 'inv5', question: '5. 资金回流的异常情况', options: [{ text: '无资金回流', score: 10 }, { text: '有少量往来款', score: 7 }, { text: '有资金回流但可解释', score: 4 }, { text: '存在明显资金回流', score: 0 }] },
+]
+
+const REVENUE_QUESTIONS = [
+  { id: 'rev1', question: '1. 收入的完整性', options: [{ text: '全部确认收入', score: 10 }, { text: '基本完整', score: 7 }, { text: '存在截留', score: 4 }, { text: '大量隐匿', score: 0 }] },
+  { id: 'rev2', question: '2. 成本的匹配性', options: [{ text: '成本与收入完全匹配', score: 10 }, { text: '基本匹配', score: 7 }, { text: '成本配比异常', score: 4 }, { text: '严重失配', score: 0 }] },
+  { id: 'rev3', question: '3. 往来款的真实性', options: [{ text: '均为真实业务往来', score: 10 }, { text: '大部分真实', score: 7 }, { text: '存在异常挂账', score: 4 }, { text: '虚构往来', score: 0 }] },
+  { id: 'rev4', question: '4. 成本发票的合法性', options: [{ text: '全部为合规发票', score: 10 }, { text: '大部分合规', score: 7 }, { text: '存在虚开发票', score: 4 }, { text: '大量虚增进项', score: 0 }] },
+]
 
 const PUBLIC_PRIVATE_QUESTIONS = [
-  { id: 'p1', question: '股东借款超一年未还？', options: ['从未发生', '1年内归还', '超1年未还'], scores: [0, 1, 3] },
-  { id: 'p2', question: '利润分配方式？', options: ['有合规分红方案', '部分分红部分挂账', '利润留公司/借款拿钱'], scores: [0, 2, 3] },
-  { id: 'p3', question: '关联方资金互转？', options: ['从未发生', '偶尔有有合同', '经常互转无理由'], scores: [0, 1, 3] },
-  { id: 'p4', question: '大额现金支付(单笔5万+)?', options: ['从未发生', '偶尔发生', '经常发生'], scores: [0, 2, 3] },
-  { id: 'p5', question: '报销替代工资？', options: ['从未发生', '少量员工', '普遍存在'], scores: [0, 2, 3] }
-];
+  { id: 'pp1', question: '1. 股东借款的合规性', options: [{ text: '无借款或已归还', score: 10 }, { text: '有借款但有协议', score: 7 }, { text: '长期挂账未还', score: 4 }, { text: '存在抽逃资金嫌疑', score: 0 }] },
+  { id: 'pp2', question: '2. 公私账户的使用', options: [{ text: '严格分开', score: 10 }, { text: '基本分开', score: 7 }, { text: '有小额混用', score: 4 }, { text: '严重混用', score: 0 }] },
+  { id: 'pp3', question: '3. 利润分配的合规性', options: [{ text: '依法分配', score: 10 }, { text: '有部分未分配', score: 7 }, { text: '存在隐匿利润', score: 4 }, { text: '严重违规分配', score: 0 }] },
+  { id: 'pp4', question: '4. 股权变更的合规性', options: [{ text: '依法办理', score: 10 }, { text: '基本合规', score: 7 }, { text: '有瑕疵', score: 4 }, { text: '严重违规', score: 0 }] },
+  { id: 'pp5', question: '5. 关联交易的公允性', options: [{ text: '定价公允', score: 10 }, { text: '基本合理', score: 7 }, { text: '存在利益输送嫌疑', score: 4 }, { text: '严重损害公司利益', score: 0 }] },
+]
 
-const TAX_POLICY_QUESTIONS = [
-  { id: 't1', question: '近24个月逾期申报/缴税？', options: ['从未发生', '1次', '2次及以上'], scores: [0, 2, 3] },
-  { id: 't2', question: '小微优惠指标是否接近/超过临界值？', options: ['不适用/完全符合', '接近', '已超标仍享受'], scores: [0, 2, 3] },
-  { id: 't3', question: '税收洼地空壳公司？', options: ['否', '有注册有部分经营', '有注册无经营'], scores: [0, 1, 3] },
-  { id: 't4', question: '税负率是否低于行业平均？', options: ['不低于', '不清楚', '明显偏低'], scores: [0, 2, 3] },
-  { id: 't5', question: '近3年是否被稽查/纳税评估？', options: ['否', '是但无问题', '是且有补税/处罚'], scores: [0, 1, 3] }
-];
+const TAX_QUESTIONS = [
+  { id: 'tax1', question: '1. 纳税申报的及时性', options: [{ text: '均按时申报', score: 10 }, { text: '偶尔逾期', score: 7 }, { text: '经常逾期', score: 4 }, { text: '长期不报', score: 0 }] },
+  { id: 'tax2', question: '2. 税种缴纳的完整性', options: [{ text: '所有税种均缴纳', score: 10 }, { text: '主要税种缴纳', score: 7 }, { text: '存在少缴', score: 4 }, { text: '严重偷逃', score: 0 }] },
+  { id: 'tax3', question: '3. 税收优惠的合规性', options: [{ text: '完全合规', score: 10 }, { text: '基本合规', score: 7 }, { text: '存在滥用优惠', score: 4 }, { text: '骗取优惠资格', score: 0 }] },
+  { id: 'tax4', question: '4. 报表报送的合规性', options: [{ text: '均按时报送', score: 10 }, { text: '偶尔延误', score: 7 }, { text: '经常延误', score: 4 }, { text: '长期不报', score: 0 }] },
+  { id: 'tax5', question: '5. 风险排查的配合度', options: [{ text: '积极主动配合', score: 10 }, { text: '配合', score: 7 }, { text: '被动配合', score: 4 }, { text: '不配合', score: 0 }] },
+]
 
-// ============== 步骤配置 ==============
-const STEPS = [
-  { id: 1, name: '基本信息', icon: '1', color: '#1E3A5F' },
-  { id: 2, name: '发票与资金流', icon: '2', color: '#B91C1C' },
-  { id: 3, name: '收入成本', icon: '3', color: '#1E40AF' },
-  { id: 4, name: '公私账户', icon: '4', color: '#6D28D9' },
-  { id: 5, name: '税务申报', icon: '5', color: '#047857' },
-  { id: 6, name: '财务数据', icon: '6', color: '#C2410C' }
-];
-
-// ============== 安全工具函数 ==============
-function safeGetYearOptions() {
-  try {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    if (typeof currentYear !== 'number' || currentYear < 2000) {
-      return [{ value: '2025-12', label: '2025年12月' }, { value: '2024-12', label: '2024年12月' }, { value: '2023-12', label: '2023年12月' }];
-    }
-    return [
-      { value: `${currentYear - 1}-12`, label: `${currentYear - 1}年12月` },
-      { value: `${currentYear - 2}-12`, label: `${currentYear - 2}年12月` },
-      { value: `${currentYear - 3}-12`, label: `${currentYear - 3}年12月` }
-    ];
-  } catch {
-    return [{ value: '2025-12', label: '2025年12月' }, { value: '2024-12', label: '2024年12月' }, { value: '2023-12', label: '2023年12月' }];
-  }
-}
-
-function safeGetDefaultLatestMonth() {
-  try {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    const m1 = currentMonth - 2;
-    const y1 = m1 >= 1 ? currentYear : currentYear - 1;
-    const adjustedM1 = m1 >= 1 ? m1 : m1 + 12;
-    return `${y1}-${String(adjustedM1).padStart(2, '0')}`;
-  } catch {
-    return '2026-04';
-  }
-}
-
-function safeCreateEmptyPeriod(period: string, type: 'latest' | 'annual'): FinancialPeriod {
-  return {
-    period, type,
-    revenue: 0, cost: 0, profit: 0, vatPaid: 0, incomeTaxPaid: 0,
-    totalAssets: 0, totalLiabilities: 0, receivables: 0, inventory: 0, advanceReceipts: 0
-  };
-}
-
-// ============== 组件 ==============
-interface RiskV4ModuleProps {
-  compact?: boolean;
-}
-
-export default function RiskV4Module({ compact = false }: RiskV4ModuleProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [phoneError, setPhoneError] = useState('');
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  const defaultMonth = useMemo(() => safeGetDefaultLatestMonth(), []);
-  const yearOptions = useMemo(() => safeGetYearOptions(), []);
-
-  const getInitialFormData = useCallback((): FormData => {
-    return {
-      enterpriseName: '', contactPerson: '', contactPhone: '', customerEmail: '',
-      industry: '', revenueScale: '',
-      invoiceAnswers: {}, revenueCostAnswers: {}, publicPrivateAnswers: {}, taxPolicyAnswers: {},
-      latestMonth: defaultMonth,
-      financialData: [
-        safeCreateEmptyPeriod(defaultMonth, 'latest'),
-        safeCreateEmptyPeriod(yearOptions[0]?.value || '2025-12', 'annual'),
-        safeCreateEmptyPeriod(yearOptions[1]?.value || '2024-12', 'annual'),
-        safeCreateEmptyPeriod(yearOptions[2]?.value || '2023-12', 'annual')
-      ]
-    };
-  }, [defaultMonth, yearOptions]);
-
-  const [formData, setFormData] = useState<FormData>(getInitialFormData);
-  const [result, setResult] = useState<ResultData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => { setIsHydrated(true); }, []);
-
-  // 设置答案
-  const setAnswer = useCallback((type: 'invoice' | 'revenueCost' | 'publicPrivate' | 'taxPolicy', id: string, score: number) => {
-    const keyMap = { invoice: 'invoiceAnswers', revenueCost: 'revenueCostAnswers', publicPrivate: 'publicPrivateAnswers', taxPolicy: 'taxPolicyAnswers' };
-    const key = keyMap[type] as keyof FormData;
-    setFormData(prev => ({ ...prev, [key]: { ...(prev[key] as Record<string, number>), [id]: score } }));
-  }, []);
-
-  // 提交表单
-  const handleSubmit = async () => {
-    if (!formData.contactPhone || formData.contactPhone.length !== 11) {
-      setPhoneError('请输入11位手机号码');
-      setCurrentStep(1);
-      return;
-    }
-    const latestPeriod = formData.financialData[0];
-    const requiredFields: Array<keyof FinancialPeriod> = ['revenue', 'cost', 'profit', 'vatPaid', 'incomeTaxPaid', 'totalAssets', 'totalLiabilities', 'receivables', 'inventory', 'advanceReceipts'];
-    const missingFields = requiredFields.filter(field => !latestPeriod[field]);
-    if (missingFields.length > 0) {
-      alert(`请填写最新一期财务数据：${missingFields.join('、')}`);
-      setCurrentStep(6);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch('/api/risk-v4-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      setResult(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '提交失败，请重试');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 获取当前步骤颜色
-  const getCurrentModuleColor = () => STEPS[currentStep - 1]?.color || '#1E3A5F';
-
-  // 渲染进度条
-  const renderProgressBar = () => (
-    <div className="mb-8">
-      <div className="flex items-center justify-between">
-        {STEPS.map((step, idx) => {
-          const isActive = currentStep >= step.id;
-          return (
-            <React.Fragment key={step.id}>
-              <div className="flex flex-col items-center">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all"
-                  style={{ backgroundColor: isActive ? step.color : '#E5E7EB', color: isActive ? 'white' : '#666666' }}>
-                  {step.icon}
-                </div>
-                <span className="text-xs mt-2 transition-colors" style={{ color: isActive ? step.color : '#999999' }}>
-                  {step.name}
-                </span>
-              </div>
-              {idx < STEPS.length - 1 && (
-                <div className="flex-1 h-1 mx-2 rounded relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[#E5E7EB] rounded" />
-                  {currentStep > step.id && (
-                    <div className="absolute inset-y-0 left-0 rounded" style={{ width: '100%', background: 'linear-gradient(to right, #B91C1C, #1E40AF, #6D28D9, #047857)' }} />
-                  )}
-                  {currentStep === step.id && (
-                    <div className="absolute inset-y-0 left-0 rounded" style={{ width: '50%', background: `linear-gradient(to right, ${step.color}, ${STEPS[idx + 1]?.color || step.color})` }} />
-                  )}
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+// ============ 子组件 ============
+const QuestionnaireSection = ({ questions, answers, onChange, color }: {
+  questions: typeof INVOICE_QUESTIONS
+  answers: Record<string, number>
+  onChange: (id: string, score: number) => void
+  color: string
+}) => (
+  <div className="space-y-4">
+    {questions.map((q, qi) => (
+      <div key={q.id || qi} className="bg-white rounded-lg p-4 border border-gray-200">
+        <p className="font-medium text-gray-800 mb-3">{q.question}</p>
+        <div className="grid grid-cols-2 gap-2">
+          {q.options.map((opt, oi) => {
+            const isSelected = answers[q.id || String(qi)] === opt.score
+            return (
+              <button
+                key={oi}
+                onClick={() => onChange(q.id || String(qi), opt.score)}
+                className={`px-4 py-2 rounded-lg border-2 text-left text-sm transition-all ${
+                  isSelected
+                    ? 'border-current text-white'
+                    : 'border-gray-200 text-gray-700 hover:border-gray-300 bg-white'
+                }`}
+                style={isSelected ? { backgroundColor: color, borderColor: color } : {}}
+              >
+                {opt.text}
+              </button>
+            )
+          })}
+        </div>
       </div>
-    </div>
-  );
+    ))}
+  </div>
+)
 
-  if (!isHydrated) {
-    return <div className="min-h-screen bg-white flex items-center justify-center"><div className="text-[#666666]">加载中...</div></div>;
-  }
-
-  const currentModuleColor = getCurrentModuleColor();
-
+const FinancialPeriodInput = ({ period, data, onChange, color, isRequired, label }: {
+  period: string
+  data: FinancialPeriod
+  onChange: (field: string, value: string) => void
+  color: string
+  isRequired: boolean
+  label: string
+}) => {
+  const fields = [
+    { key: 'revenue', label: '营业收入', tip: '资产负债表附注或利润表第一行「营业收入」' },
+    { key: 'cost', label: '营业成本', tip: '利润表「营业成本」' },
+    { key: 'profit', label: '利润总额', tip: '利润表「利润总额」（税前利润）' },
+    { key: 'vatPaid', label: '实缴增值税', tip: '增值税申报表主表「应纳税额」或「已缴税额」' },
+    { key: 'incomeTaxPaid', label: '实缴所得税', tip: '企业所得税年度申报表「实际应纳所得税额」' },
+    { key: 'totalAssets', label: '总资产', tip: '资产负债表「资产总计」' },
+    { key: 'totalLiabilities', label: '总负债', tip: '资产负债表「负债合计」' },
+    { key: 'receivables', label: '应收账款', tip: '资产负债表「应收账款」' },
+    { key: 'inventory', label: '期末存货', tip: '资产负债表「存货」' },
+    { key: 'advanceReceipts', label: '预收账款', tip: '资产负债表「预收款项」或「合同负债」' },
+  ]
   return (
-    <div className={`min-h-screen ${compact ? 'bg-transparent' : 'bg-white'}`}>
-      {!compact && (
-        <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
-          <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#2563EB] to-[#7C3AED] rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">张</span>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-[#1A1A2E]">财税风险检测</h1>
-                <p className="text-xs text-[#666666]">企业财税健康诊断</p>
+    <div className="bg-white rounded-lg p-4 border-2" style={{ borderColor: color }}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="font-bold" style={{ color }}>{label}</span>
+        {!isRequired && <span className="text-xs text-gray-500">可选</span>}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {fields.map(f => (
+          <div key={f.key} className="relative">
+            <label className="text-xs text-gray-600 mb-1 block">
+              {f.label}{isRequired && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                value={data[f.key as keyof FinancialPeriod] as string}
+                onChange={e => onChange(f.key, e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+              <div className="group absolute right-2 top-1/2 -translate-y-1/2">
+                <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap z-10">
+                  {f.tip}
+                </div>
               </div>
             </div>
           </div>
-        </header>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const ResultReport = ({ result }: { result: ResultData }) => {
+  const getPercentScore = () => {
+    if (!result.maxScore) return 0
+    return Math.round((result.riskScore / result.maxScore) * 1000) / 10
+  }
+  const getRiskColor = () => {
+    switch (result.riskLevel) {
+      case '低风险': return 'text-green-600 bg-green-50'
+      case '中风险': return 'text-amber-600 bg-amber-50'
+      case '高风险': return 'text-orange-600 bg-orange-50'
+      default: return 'text-red-600 bg-red-50'
+    }
+  }
+  const moduleScores = Object.entries(result.weightedScores || {}).map(([k, v]) => ({ name: k, score: v }))
+
+  return (
+    <div className="space-y-6">
+      {/* 报告头部 */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">{result.enterpriseName}</h2>
+            <p className="text-gray-500 text-sm mt-1">检测时间: {result.detectionTime}</p>
+          </div>
+          <div className={`px-4 py-2 rounded-lg font-bold ${getRiskColor()}`}>
+            {result.riskLevel}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-blue-50 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-blue-600">{result.riskScore}</div>
+            <div className="text-sm text-gray-600">风险得分</div>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-purple-600">{result.maxScore}</div>
+            <div className="text-sm text-gray-600">满分</div>
+          </div>
+          <div className="bg-orange-50 rounded-lg p-4 text-center">
+            <div className="text-3xl font-bold text-orange-600">{getPercentScore()}分</div>
+            <div className="text-sm text-gray-600">百分制</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 数据完整度提示 */}
+      {result.dataCompleteness && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+          {result.dataCompleteness}
+        </div>
       )}
 
-      <main className={`${compact ? 'p-0' : 'max-w-5xl mx-auto px-6 py-8'}`}>
-        {result ? (
-          <ResultStep
-            result={result}
-            formData={{ enterpriseName: formData.enterpriseName, industry: formData.industry, revenueScale: formData.revenueScale }}
-            onReset={() => { setResult(null); setCurrentStep(1); }}
-          />
-        ) : (
-          <>
-            {renderProgressBar()}
+      {/* 预估风险金额 */}
+      {result.estimatedRiskAmount > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="text-red-600 font-bold">预估风险金额</div>
+          <div className="text-2xl font-bold text-red-700 mt-1">
+            ¥{result.estimatedRiskAmount.toLocaleString()}万元
+          </div>
+        </div>
+      )}
 
-            <div className="bg-white rounded-xl border-2 p-6 mb-6" style={{ borderColor: currentModuleColor }}>
-              <h2 className="text-lg font-semibold mb-6" style={{ color: currentModuleColor }}>
-                {STEPS[currentStep - 1].name}
-              </h2>
+      {/* 模块得分 */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200">
+        <h3 className="font-bold text-gray-800 mb-4">风险分布</h3>
+        <div className="space-y-3">
+          {moduleScores.map(m => {
+            const percent = result.maxScore ? (m.score / result.maxScore) * 100 : 0
+            return (
+              <div key={m.name}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-700">{m.name}</span>
+                  <span className="text-gray-500">{m.score}分</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" style={{ width: `${percent}%` }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
-              {currentStep === 1 && <BasicInfoStep formData={formData} setFormData={setFormData} phoneError={phoneError} phoneErrorSetter={setPhoneError} />}
-              {currentStep === 2 && <QuestionnaireStep questions={INVOICE_QUESTIONS} answers={formData.invoiceAnswers} setAnswer={(id, score) => setAnswer('invoice', id, score)} moduleName="发票" />}
-              {currentStep === 3 && <QuestionnaireStep questions={REVENUE_COST_QUESTIONS} answers={formData.revenueCostAnswers} setAnswer={(id, score) => setAnswer('revenueCost', id, score)} moduleName="收入成本" />}
-              {currentStep === 4 && <QuestionnaireStep questions={PUBLIC_PRIVATE_QUESTIONS} answers={formData.publicPrivateAnswers} setAnswer={(id, score) => setAnswer('publicPrivate', id, score)} moduleName="公私账户" />}
-              {currentStep === 5 && <QuestionnaireStep questions={TAX_POLICY_QUESTIONS} answers={formData.taxPolicyAnswers} setAnswer={(id, score) => setAnswer('taxPolicy', id, score)} moduleName="税务" />}
-              {currentStep === 6 && <FinancialDataStep formData={formData} setFormData={setFormData} focusedField={focusedField} setFocusedField={setFocusedField} />}
-            </div>
+      {/* 风险项明细 */}
+      {result.riskItems && result.riskItems.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-800 mb-4">风险项明细</h3>
+          <div className="space-y-3">
+            {result.riskItems.slice(0, 10).map((item, idx) => (
+              <div key={idx} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-800">{item.item}</div>
+                  <div className="text-sm text-gray-600 mt-1">{item.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+      {/* 趋势分析 */}
+      {result.trendWarnings && result.trendWarnings.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-800 mb-4">趋势预警</h3>
+          <div className="space-y-3">
+            {result.trendWarnings.map((tw, idx) => (
+              <div key={idx} className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-orange-500" />
+                <div className="flex-1">
+                  <div className="font-medium text-gray-800">{tw.type}</div>
+                  <div className="text-sm text-gray-600">
+                    当前: {tw.current} | 上期: {tw.previous}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            <div className="flex gap-3">
-              {currentStep > 1 && (
-                <button onClick={() => setCurrentStep(s => s - 1)} className="px-6 py-3 text-sm font-medium text-[#333333] bg-white border border-[#E5E7EB] rounded-lg hover:bg-gray-50 transition-colors">
-                  上一步
-                </button>
-              )}
-              {currentStep < 6 && (
-                <button onClick={() => setCurrentStep(s => s + 1)} className="flex-1 px-6 py-3 text-sm font-medium text-white rounded-lg hover:opacity-90 transition-colors" style={{ backgroundColor: currentModuleColor }}>
-                  下一步
-                </button>
-              )}
-              {currentStep === 6 && (
-                <button onClick={handleSubmit} disabled={loading} className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#C2410C] rounded-lg hover:bg-[#9A3412] transition-colors disabled:opacity-50">
-                  {loading ? '提交中...' : '提交检测'}
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </main>
+      {/* 改进建议 */}
+      {result.improvementSuggestions && result.improvementSuggestions.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <h3 className="font-bold text-gray-800 mb-4">改进建议</h3>
+          <ul className="space-y-2">
+            {result.improvementSuggestions.map((s, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-gray-700">
+                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                {s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
-  );
+  )
+}
+
+// ============ 主组件 ============
+export default function RiskV4Module() {
+  const [currentStep, setCurrentStep] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [result, setResult] = useState<ResultData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [phoneError, setPhoneError] = useState('')
+
+  const yearOptions = useMemo(() => safeGetYearOptions(), [])
+  const defaultLatestMonth = useMemo(() => safeGetDefaultLatestMonth(), [])
+
+  const [formData, setFormData] = useState<FormData>(() => {
+    const latest = safeCreateEmptyPeriod(defaultLatestMonth, 'latest')
+    return {
+      enterpriseName: '', contactPerson: '', contactPhone: '', customerEmail: '',
+      industry: '', revenueScale: '',
+      invoiceAnswers: {}, revenueAnswers: {}, publicPrivateAnswers: {}, taxAnswers: {},
+      financialData: [
+        latest,
+        safeCreateEmptyPeriod(`${yearOptions[0]}-12`, 'annual'),
+        safeCreateEmptyPeriod(`${yearOptions[1]}-12`, 'annual'),
+        safeCreateEmptyPeriod(`${yearOptions[2]}-12`, 'annual'),
+      ],
+      latestMonth: defaultLatestMonth,
+    }
+  })
+
+  useEffect(() => { setIsHydrated(true) }, [])
+
+  const handleFinancialChange = useCallback((periodIndex: number, field: string, value: string) => {
+    setFormData(prev => {
+      const newData = [...prev.financialData]
+      newData[periodIndex] = { ...newData[periodIndex], [field]: value }
+      return { ...prev, financialData: newData }
+    })
+  }, [])
+
+  const handleFinancialPeriodChange = useCallback((periodIndex: number, field: keyof FinancialPeriod, value: string) => {
+    setFormData(prev => {
+      const newData = [...prev.financialData]
+      newData[periodIndex] = { ...newData[periodIndex], [field]: value }
+      return { ...prev, financialData: newData }
+    })
+  }, [])
+
+  const validateStep = (step: number): string | null => {
+    if (step === 0) {
+      if (!formData.enterpriseName.trim()) return '请输入企业名称'
+      if (!formData.contactPerson.trim()) return '请输入联系人'
+      const phone = formData.contactPhone.replace(/\D/g, '')
+      if (phone.length > 0 && phone.length !== 11) return '请输入11位手机号码'
+      if (!formData.industry) return '请选择所属行业'
+      if (!formData.revenueScale) return '请选择营收规模'
+    }
+    if (step === 1) {
+      const answered = Object.keys(formData.invoiceAnswers).length
+      if (answered < 5) return '请完成所有发票与资金流问题'
+    }
+    if (step === 2) {
+      const answered = Object.keys(formData.revenueAnswers).length
+      if (answered < 4) return '请完成所有收入与成本问题'
+    }
+    if (step === 3) {
+      const answered = Object.keys(formData.publicPrivateAnswers).length
+      if (answered < 5) return '请完成所有公私账户问题'
+    }
+    if (step === 4) {
+      const answered = Object.keys(formData.taxAnswers).length
+      if (answered < 5) return '请完成所有税务申报问题'
+    }
+    if (step === 5) {
+      const latest = formData.financialData[0]
+      const required = ['revenue', 'cost', 'profit', 'vatPaid', 'incomeTaxPaid', 'totalAssets', 'totalLiabilities', 'receivables', 'inventory', 'advanceReceipts']
+      for (const r of required) {
+        if (!latest[r as keyof FinancialPeriod]) return '请填写最新一期全部必填字段'
+      }
+    }
+    return null
+  }
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const payload = {
+        enterpriseName: formData.enterpriseName,
+        contactPerson: formData.contactPerson,
+        contactPhone: formData.contactPhone,
+        customerEmail: formData.customerEmail,
+        industry: formData.industry,
+        revenueScale: formData.revenueScale,
+        invoiceAnswers: formData.invoiceAnswers,
+        revenueAnswers: formData.revenueAnswers,
+        publicPrivateAnswers: formData.publicPrivateAnswers,
+        taxAnswers: formData.taxAnswers,
+        financialData: formData.financialData,
+        latestMonth: formData.latestMonth,
+      }
+      const res = await fetch('/api/risk-v4-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '提交失败')
+      setResult(data.result)
+    } catch (err: any) {
+      setError(err.message || '检测失败')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const getProgressGradient = () => {
+    const colors = ['#B91C1C', '#1E40AF', '#6D28D9', '#047857', '#C2410C']
+    return `linear-gradient(to right, ${colors.slice(0, currentStep + 1).join(', ')})`
+  }
+
+  if (!isHydrated) {
+    return <div className="min-h-screen bg-white flex items-center justify-center text-gray-500">加载中...</div>
+  }
+
+  if (result) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">风险检测报告</h1>
+          </div>
+          <ResultReport result={result} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* 顶部进度条 */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="text-xl font-bold text-gray-900">企业风险检测 V4</h1>
+            <span className="text-sm text-gray-500">第 {currentStep + 1} / {STEPS.length} 步</span>
+          </div>
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%`, background: getProgressGradient() }} />
+          </div>
+          <div className="flex justify-between mt-2 text-xs text-gray-500">
+            {STEPS.map((s, i) => (
+              <span key={s.id} className={i <= currentStep ? 'text-blue-600 font-medium' : ''}>{s.label}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 步骤内容 */}
+      <div className="max-w-4xl mx-auto p-6">
+        {/* 步骤0: 基本信息 */}
+        {currentStep === 0 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#1E3A5F' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#1E3A5F' }}>基本信息</h2>
+            </div>
+            <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">企业名称 <span className="text-red-500">*</span></label>
+                <input type="text" value={formData.enterpriseName} onChange={e => setFormData(p => ({ ...p, enterpriseName: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="请输入企业全称" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">联系人 <span className="text-red-500">*</span></label>
+                  <input type="text" value={formData.contactPerson} onChange={e => setFormData(p => ({ ...p, contactPerson: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="请输入联系人姓名" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">联系电话 <span className="text-red-500">*</span></label>
+                  <input type="tel" value={formData.contactPhone} onChange={e => {
+                    const v = e.target.value.replace(/\D/g, '').slice(0, 11)
+                    setFormData(p => ({ ...p, contactPhone: v }))
+                    if (v.length > 0 && v.length < 11) setPhoneError('请输入11位手机号码')
+                    else setPhoneError('')
+                  }} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 ${phoneError ? 'border-red-500 ring-red-200' : 'border-gray-300 focus:ring-blue-500'}`} placeholder="用于接收检测报告" />
+                  {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">邮箱（选填）</label>
+                <input type="email" value={formData.customerEmail} onChange={e => setFormData(p => ({ ...p, customerEmail: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="用于接收电子报告" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">所属行业 <span className="text-red-500">*</span></label>
+                  <select value={formData.industry} onChange={e => setFormData(p => ({ ...p, industry: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">请选择行业</option>
+                    <option value="制造业">制造业</option>
+                    <option value="批发零售">批发零售</option>
+                    <option value="建筑房地产">建筑房地产</option>
+                    <option value="交通运输">交通运输</option>
+                    <option value="餐饮住宿">餐饮住宿</option>
+                    <option value="信息技术">信息技术</option>
+                    <option value="其他服务业">其他服务业</option>
+                    <option value="农林牧渔">农林牧渔</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">营收规模 <span className="text-red-500">*</span></label>
+                  <select value={formData.revenueScale} onChange={e => setFormData(p => ({ ...p, revenueScale: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">请选择规模</option>
+                    <option value="小规模（500万以下）">小规模（500万以下）</option>
+                    <option value="中小（500万-2000万）">中小（500万-2000万）</option>
+                    <option value="中型（2000万-1亿）">中型（2000万-1亿）</option>
+                    <option value="大型（1亿以上）">大型（1亿以上）</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 步骤1: 发票与资金流 */}
+        {currentStep === 1 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#B91C1C' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#B91C1C' }}>发票与资金流</h2>
+            </div>
+            <QuestionnaireSection questions={INVOICE_QUESTIONS} answers={formData.invoiceAnswers} onChange={(id, score) => setFormData(p => ({ ...p, invoiceAnswers: { ...p.invoiceAnswers, [id]: score } }))} color="#B91C1C" />
+          </div>
+        )}
+
+        {/* 步骤2: 收入与成本 */}
+        {currentStep === 2 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#1E40AF' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#1E40AF' }}>收入与成本</h2>
+            </div>
+            <QuestionnaireSection questions={REVENUE_QUESTIONS} answers={formData.revenueAnswers} onChange={(id, score) => setFormData(p => ({ ...p, revenueAnswers: { ...p.revenueAnswers, [id]: score } }))} color="#1E40AF" />
+          </div>
+        )}
+
+        {/* 步骤3: 公私账户与股东 */}
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#6D28D9' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#6D28D9' }}>公私账户与股东</h2>
+            </div>
+            <QuestionnaireSection questions={PUBLIC_PRIVATE_QUESTIONS} answers={formData.publicPrivateAnswers} onChange={(id, score) => setFormData(p => ({ ...p, publicPrivateAnswers: { ...p.publicPrivateAnswers, [id]: score } }))} color="#6D28D9" />
+          </div>
+        )}
+
+        {/* 步骤4: 税务申报 */}
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#047857' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#047857' }}>税务申报</h2>
+            </div>
+            <QuestionnaireSection questions={TAX_QUESTIONS} answers={formData.taxAnswers} onChange={(id, score) => setFormData(p => ({ ...p, taxAnswers: { ...p.taxAnswers, [id]: score } }))} color="#047857" />
+          </div>
+        )}
+
+        {/* 步骤5: 财务数据 */}
+        {currentStep === 5 && (
+          <div className="space-y-6">
+            <div className="border-b-2 pb-2" style={{ borderColor: '#C2410C' }}>
+              <h2 className="text-xl font-bold" style={{ color: '#C2410C' }}>财务数据</h2>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm">
+              💡 经营年度数据越完整，对比度越高，风险诊断越精准。建议至少填报2期数据。
+            </div>
+            {/* 最新一期月份选择 */}
+            <div className="bg-white rounded-lg p-4 border-2" style={{ borderColor: '#C2410C' }}>
+              <div className="flex items-center gap-4">
+                <label className="font-medium text-gray-700">数据所属月份</label>
+                <select value={formData.latestMonth} onChange={e => {
+                  const newMonth = e.target.value
+                  setFormData(p => {
+                    const newData = [...p.financialData]
+                    newData[0] = { ...newData[0], period: newMonth }
+                    return { ...p, latestMonth: newMonth, financialData: newData }
+                  })
+                }} className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                  <option value="2026-04">2026-04</option>
+                  <option value="2026-05">2026-05</option>
+                </select>
+              </div>
+            </div>
+            {/* 4期财务数据 */}
+            <FinancialPeriodInput period={formData.financialData[0].period} data={formData.financialData[0]} onChange={(f, v) => handleFinancialPeriodChange(0, f as keyof FinancialPeriod, v)} color="#C2410C" isRequired={true} label={`最新一期 ${formData.financialData[0].period}`} />
+            {yearOptions.map((y, i) => (
+              <FinancialPeriodInput key={y} period={`${y}-12`} data={formData.financialData[i + 1]} onChange={(f, v) => handleFinancialPeriodChange(i + 1, f as keyof FinancialPeriod, v)} color={['#3B82F6', '#10B981', '#8B5CF6'][i]} isRequired={false} label={`${y}年12月`} />
+            ))}
+          </div>
+        )}
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+        )}
+
+        {/* 导航按钮 */}
+        <div className="flex justify-between mt-8">
+          {currentStep > 0 ? (
+            <button onClick={() => setCurrentStep(s => s - 1)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">上一步</button>
+          ) : <div />}
+          {currentStep < STEPS.length - 1 ? (
+            <button
+              onClick={() => { const e = validateStep(currentStep); if (e) { setError(e); return }; setError(null); setCurrentStep(s => s + 1) }}
+              className="px-6 py-3 rounded-lg text-white font-medium flex items-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+            >
+              下一步 <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button onClick={handleSubmit} disabled={isSubmitting} className="px-8 py-3 rounded-lg text-white font-medium flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50">
+              {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> 检测中...</> : '提交检测'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
