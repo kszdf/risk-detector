@@ -35,9 +35,8 @@ interface ResultData {
   riskId: string;
   overallRiskLevel: string;
   riskScore: number;
-  estimatedRiskAmount: number;
   riskDetails: string[];
-  trendWarnings: string[];
+  crossValidation: string[];
   reportStatus: string;
   moduleScores: {
     invoice: number;
@@ -247,11 +246,10 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           riskId: data.riskId,
           overallRiskLevel: data.overallRiskLevel,
           riskScore: data.riskScore,
-          estimatedRiskAmount: data.estimatedRiskAmount,
           riskDetails: data.riskDetails || [],
-          trendWarnings: data.trendWarnings || [],
+          crossValidation: data.crossValidation || [],
           reportStatus: data.reportStatus,
-          moduleScores
+          moduleScores: data.moduleScores || moduleScores
         });
         setCurrentStep(6); // 结果页
       } else {
@@ -834,26 +832,18 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               </div>
             )}
             
-            {/* 趋势预警 */}
-            {result.trendWarnings.length > 0 && (
+            {/* 交叉验证结果 */}
+            {result.crossValidation.length > 0 && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-amber-400 mb-3">🔶 趋势预警</h4>
+                <h4 className="text-lg font-medium text-amber-400 mb-3">🔶 交叉验证结果</h4>
                 <ul className="space-y-2">
-                  {result.trendWarnings.map((warning, idx) => (
+                  {result.crossValidation.map((warning, idx) => (
                     <li key={idx} className="text-amber-300 flex items-start gap-2">
                       <span>•</span>
                       <span>{warning}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-            
-            {/* 预估风险金额 */}
-            {result.estimatedRiskAmount > 0 && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center">
-                <div className="text-sm text-slate-400 mb-2">预估潜在补税风险金额</div>
-                <div className="text-3xl font-bold text-rose-400">{result.estimatedRiskAmount.toFixed(2)} 万元</div>
               </div>
             )}
             
