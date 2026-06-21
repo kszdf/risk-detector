@@ -87,23 +87,23 @@ export async function POST(request: NextRequest) {
       '检测年份': body.detectionYear?.toString() || body.year?.toString() || '2025',
       
       // 财务数据（数值类型，支持多种字段名）
-      '营业收入(万元)': Number(body.revenue || body.income) || 0,
-      '营业成本(万元)': Number(body.cost || body.expense) || 0,
-      '利润总额(万元)': Number(body.profit || body.profitTotal) || 0,
-      '实缴增值税(万元)': Number(body.vat || body.vatPaid) || 0,
-      '实缴所得税(万元)': Number(body.cit || body.incomeTaxPaid) || 0,
-      '总资产(万元)': Number(body.totalAssets || body.assets) || 0,
-      '总负债(万元)': Number(body.totalLiabilities || body.liabilities) || 0,
-      '应收账款(万元)': Number(body.receivables || body.accountsReceivable) || 0,
-      '期末存货(万元)': Number(body.inventory || body.stock) || 0,
-      '预收账款(万元)': Number(body.advancePayment || body.advanceReceipts) || 0,
+      '营业收入(万元)': Number(body.revenue || body.income || 0) || 0,
+      '营业成本(万元)': Number(body.cost || body.expense || 0) || 0,
+      '利润总额(万元)': Number(body.profit || body.profitTotal || 0) || 0,
+      '实缴增值税(万元)': Number(body.vat || body.vatPaid || 0) || 0,
+      '实缴所得税(万元)': Number(body.cit || body.incomeTaxPaid || 0) || 0,
+      '总资产(万元)': Number(body.totalAssets || body.assets || 0) || 0,
+      '总负债(万元)': Number(body.totalLiabilities || body.liabilities || 0) || 0,
+      '应收账款(万元)': Number(body.receivables || body.accountsReceivable || 0) || 0,
+      '期末存货(万元)': Number(body.inventory || body.stock || 0) || 0,
+      '预收账款(万元)': Number(body.advancePayment || body.advanceReceipts || 0) || 0,
       
       // 财务指标（数值类型）
-      '增值税税负率': Number(body.vatRate) || 0,
-      '所得税贡献率': Number(body.citRate) || 0,
-      '毛利率': Number(body.grossMargin) || 0,
-      '净利率': Number(body.netMargin) || 0,
-      '资产负债率': Number(body.debtRatio) || 0,
+      '增值税税负率': Number(body.vatRate || body.vatRateText || 0) || 0,
+      '所得税贡献率': Number(body.citRate || body.citRateText || 0) || 0,
+      '毛利率': Number(body.grossMargin || body.grossMarginText || 0) || 0,
+      '净利率': Number(body.netMargin || body.netMarginText || 0) || 0,
+      '资产负债率': Number(body.debtRatio || body.debtRatioText || 0) || 0,
       
       // 报告信息
       '检测ID': detectionId,
