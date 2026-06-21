@@ -36,9 +36,10 @@ interface BasicInfoStepProps {
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
   phoneError: string;
+  phoneErrorSetter: (error: string) => void;
 }
 
-export default function BasicInfoStep({ formData, setFormData, phoneError }: BasicInfoStepProps) {
+export default function BasicInfoStep({ formData, setFormData, phoneError, phoneErrorSetter }: BasicInfoStepProps) {
   const update = (field: keyof Pick<FormData, 'enterpriseName' | 'contactPerson' | 'contactPhone' | 'customerEmail' | 'industry' | 'revenueScale'>, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -47,7 +48,9 @@ export default function BasicInfoStep({ formData, setFormData, phoneError }: Bas
     const val = value.replace(/\D/g, '').slice(0, 11);
     update('contactPhone', val);
     if (val && val.length !== 11) {
-      // 错误由父组件管理
+      phoneErrorSetter('请输入11位手机号码');
+    } else {
+      phoneErrorSetter('');
     }
   };
 

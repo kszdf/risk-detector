@@ -90,8 +90,9 @@ const STEPS = [
   { id: 1, name: '基本信息', icon: '1', color: '#1E3A5F' },
   { id: 2, name: '发票与资金流', icon: '2', color: '#B91C1C' },
   { id: 3, name: '收入成本', icon: '3', color: '#1E40AF' },
-  { id: 4, name: '税务申报', icon: '4', color: '#047857' },
-  { id: 5, name: '财务数据', icon: '5', color: '#C2410C' }
+  { id: 4, name: '公私账户', icon: '4', color: '#6D28D9' },
+  { id: 5, name: '税务申报', icon: '5', color: '#047857' },
+  { id: 6, name: '财务数据', icon: '6', color: '#C2410C' }
 ];
 
 // ============== 安全工具函数 ==============
@@ -189,7 +190,7 @@ export default function RiskV4Module({ compact = false }: RiskV4ModuleProps) {
     const missingFields = requiredFields.filter(field => !latestPeriod[field]);
     if (missingFields.length > 0) {
       alert(`请填写最新一期财务数据：${missingFields.join('、')}`);
-      setCurrentStep(5);
+      setCurrentStep(6);
       return;
     }
     setLoading(true);
@@ -288,11 +289,12 @@ export default function RiskV4Module({ compact = false }: RiskV4ModuleProps) {
                 {STEPS[currentStep - 1].name}
               </h2>
 
-              {currentStep === 1 && <BasicInfoStep formData={formData} setFormData={setFormData} phoneError={phoneError} />}
+              {currentStep === 1 && <BasicInfoStep formData={formData} setFormData={setFormData} phoneError={phoneError} phoneErrorSetter={setPhoneError} />}
               {currentStep === 2 && <QuestionnaireStep questions={INVOICE_QUESTIONS} answers={formData.invoiceAnswers} setAnswer={(id, score) => setAnswer('invoice', id, score)} moduleName="发票" />}
               {currentStep === 3 && <QuestionnaireStep questions={REVENUE_COST_QUESTIONS} answers={formData.revenueCostAnswers} setAnswer={(id, score) => setAnswer('revenueCost', id, score)} moduleName="收入成本" />}
-              {currentStep === 4 && <QuestionnaireStep questions={TAX_POLICY_QUESTIONS} answers={formData.taxPolicyAnswers} setAnswer={(id, score) => setAnswer('taxPolicy', id, score)} moduleName="税务" />}
-              {currentStep === 5 && <FinancialDataStep formData={formData} setFormData={setFormData} focusedField={focusedField} setFocusedField={setFocusedField} />}
+              {currentStep === 4 && <QuestionnaireStep questions={PUBLIC_PRIVATE_QUESTIONS} answers={formData.publicPrivateAnswers} setAnswer={(id, score) => setAnswer('publicPrivate', id, score)} moduleName="公私账户" />}
+              {currentStep === 5 && <QuestionnaireStep questions={TAX_POLICY_QUESTIONS} answers={formData.taxPolicyAnswers} setAnswer={(id, score) => setAnswer('taxPolicy', id, score)} moduleName="税务" />}
+              {currentStep === 6 && <FinancialDataStep formData={formData} setFormData={setFormData} focusedField={focusedField} setFocusedField={setFocusedField} />}
             </div>
 
             {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
@@ -303,12 +305,12 @@ export default function RiskV4Module({ compact = false }: RiskV4ModuleProps) {
                   上一步
                 </button>
               )}
-              {currentStep < 5 && (
+              {currentStep < 6 && (
                 <button onClick={() => setCurrentStep(s => s + 1)} className="flex-1 px-6 py-3 text-sm font-medium text-white rounded-lg hover:opacity-90 transition-colors" style={{ backgroundColor: currentModuleColor }}>
                   下一步
                 </button>
               )}
-              {currentStep === 5 && (
+              {currentStep === 6 && (
                 <button onClick={handleSubmit} disabled={loading} className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#C2410C] rounded-lg hover:bg-[#9A3412] transition-colors disabled:opacity-50">
                   {loading ? '提交中...' : '提交检测'}
                 </button>
