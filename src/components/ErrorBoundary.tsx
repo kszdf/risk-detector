@@ -1,10 +1,9 @@
 'use client';
 
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { Component, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
 }
 
 interface State {
@@ -12,7 +11,8 @@ interface State {
   error: Error | null;
 }
 
-export default class ErrorBoundary extends Component<Props, State> {
+// 错误边界组件
+class ErrorBoundaryComponent extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -22,27 +22,24 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('RiskV4 Error:', error, errorInfo);
   }
 
   render() {
     if (this.state.hasError && this.state.error) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-      
-      const stackLines = (this.state.error.stack || '').split('\n').slice(0, 3).join('\n');
+      const error = this.state.error;
+      const stackLines = (error.stack || '').split('\n').slice(0, 3).join('\n');
       
       return (
         <div className="min-h-screen bg-white flex items-center justify-center p-6">
           <div className="max-w-lg w-full">
             <div className="bg-red-50 border border-red-200 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-red-700 mb-3">
-                页面出错
+                页面渲染出错
               </h2>
               <div className="text-red-600 text-sm mb-2">
-                <strong>错误信息：</strong> {this.state.error.message}
+                <strong>错误信息：</strong> {error.message}
               </div>
               <pre className="text-xs text-red-500 bg-red-100 p-3 rounded mt-2 overflow-auto whitespace-pre-wrap">
                 {stackLines}
@@ -61,4 +58,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+export default function ErrorBoundary({ children }: { children: ReactNode }) {
+  return <ErrorBoundaryComponent>{children}</ErrorBoundaryComponent>;
 }
