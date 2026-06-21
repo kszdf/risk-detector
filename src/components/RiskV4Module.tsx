@@ -1,9 +1,24 @@
 'use client';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 
 // ============== 类型定义 ==============
+interface FinancialPeriod {
+  period: string;  // "2026-04" 或 "2025-12"
+  type: 'latest' | 'annual';
+  revenue: number;
+  cost: number;
+  profit: number;
+  vatPaid: number;
+  incomeTaxPaid: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  receivables: number;
+  inventory: number;
+  advanceReceipts: number;
+}
+
 interface FormData {
   enterpriseName: string;
   contactPerson: string;
@@ -15,18 +30,8 @@ interface FormData {
   revenueCostAnswers: Record<string, number>;
   publicPrivateAnswers: Record<string, number>;
   taxPolicyAnswers: Record<string, number>;
-  financialData: Array<{
-    year: number;
-    revenue: number;
-    cost: number;
-    profit: number;
-    vatPaid: number;
-    incomeTaxPaid: number;
-    totalAssets: number;
-    totalLiabilities: number;
-    receivables?: number;
-    advanceReceipts?: number;
-  }>;
+  financialData: FinancialPeriod[];
+  latestMonth: string; // 最新一期月份，如 "2026-04"
 }
 
 interface ResultData {
@@ -40,7 +45,7 @@ interface ResultData {
   weightedScores: { invoice: number; revenueCost: number; publicPrivate: number; taxPolicy: number };
   trendWarnings: Array<{ type: string; label: string; score: number; detail: string }>;
   trendData: Array<{
-    year: number;
+    period: string;
     revenue: number;
     grossMargin: number;
     netMargin: number;
@@ -60,6 +65,8 @@ interface ResultData {
     totalMax: number;
   };
   reportContent: Record<string, unknown>;
+  dataCompleteness: number; // 数据期数
+  dataCompletenessMsg: string; // 数据完整度说明
 }
 
 // ============== 行业基准数据 ==============
@@ -116,6 +123,7 @@ const FIELD_HINTS: Record<string, string> = {
   totalAssets: '资产负债表「资产总计」',
   totalLiabilities: '资产负债表「负债合计」',
   receivables: '资产负债表「应收账款」',
+  inventory: '资产负债表「存货」',
   advanceReceipts: '资产负债表「预收款项」或「合同负债」'
 };
 
@@ -128,12 +136,94 @@ const STEPS = [
   { id: 5, name: '财务数据', icon: '5' }
 ];
 
+// ============== 工具函数 ==============
+function getYearOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  return [
+    { value: `${currentYear - 1}-12`, label: `${currentYear - 1}年12月` },
+    { value: `${currentYear - 2}-12`, label: `${currentYear - 2}年12月` },
+    { value: `${currentYear - 3}-12`, label: `${currentYear - 3}年12月` }
+  ];
+}
+
+function getMonthOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  
+  const options: { value: string; label: string }[] = [];
+  
+  // 最近2个月
+  for (let i = 2; i >= 1; i--) {
+    let month = currentMonth - i;
+    let year = currentYear;
+    if (month <= 0) {
+      month += 12;
+      year -= 1;
+    }
+    const value = `${year}-${String(month).padStart(2, '0')}`;
+    const label = `${year}年${month}月`;
+    options.push({ value, label });
+  }
+  
+  return options;
+}
+
+function createEmptyPeriod(period: string, type: 'latest' | 'annual'): FinancialPeriod {
+  return {
+    period,
+    type,
+    revenue: 0,
+    cost: 0,
+    profit: 0,
+    vatPaid: 0,
+    incomeTaxPaid: 0,
+    totalAssets: 0,
+    totalLiabilities: 0,
+    receivables: 0,
+    inventory: 0,
+    advanceReceipts: 0
+  };
+}
+
+function getDataCompleteness(data: FinancialPeriod[]): { count: number; msg: string } {
+  const filledCount = data.filter(d => d.revenue > 0 || d.profit > 0).length;
+  
+  if (filledCount === 1) {
+    return { count: 1, msg: '本次检测仅基于单期数据，无法进行趋势分析。建议补充年度数据以获取更精准诊断。' };
+  } else if (filledCount === 2) {
+    return { count: 2, msg: '基于2期数据对比，已识别同比变化趋势。补充更多年度数据可提升诊断精度。' };
+  } else if (filledCount === 3) {
+    return { count: 3, msg: '基于3期数据对比，趋势分析可信度较高。' };
+  } else if (filledCount >= 4) {
+    return { count: 4, msg: '基于4期完整数据，趋势分析最为精准，诊断结果参考价值最高。' };
+  }
+  return { count: filledCount, msg: '' };
+}
+
 // ============== 主组件 ==============
 export default function RiskV4Module({ compact = false, onBack }: { compact?: boolean; onBack?: () => void }) {
   const [currentStep, setCurrentStep] = useState(1);
-  const currentYear = new Date().getFullYear();
   const [phoneError, setPhoneError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  
+  // 初始化最新一期月份（默认当前月份-2）
+  const getDefaultLatestMonth = (): string => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    let month = currentMonth - 2;
+    let year = currentYear;
+    if (month <= 0) {
+      month += 12;
+      year -= 1;
+    }
+    return `${year}-${String(month).padStart(2, '0')}`;
+  };
+  
+  const monthOptions = getMonthOptions();
+  const yearOptions = getYearOptions();
   
   const [formData, setFormData] = useState<FormData>({
     enterpriseName: '',
@@ -146,12 +236,15 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
     revenueCostAnswers: {},
     publicPrivateAnswers: {},
     taxPolicyAnswers: {},
+    latestMonth: getDefaultLatestMonth(),
     financialData: [
-      { year: currentYear, revenue: 0, cost: 0, profit: 0, vatPaid: 0, incomeTaxPaid: 0, totalAssets: 0, totalLiabilities: 0, receivables: 0, advanceReceipts: 0 },
-      { year: currentYear - 1, revenue: 0, cost: 0, profit: 0, vatPaid: 0, incomeTaxPaid: 0, totalAssets: 0, totalLiabilities: 0 },
-      { year: currentYear - 2, revenue: 0, cost: 0, profit: 0, vatPaid: 0, incomeTaxPaid: 0, totalAssets: 0, totalLiabilities: 0 }
+      createEmptyPeriod(getDefaultLatestMonth(), 'latest'),
+      createEmptyPeriod(yearOptions[0]?.value || `${new Date().getFullYear() - 1}-12`, 'annual'),
+      createEmptyPeriod(yearOptions[1]?.value || `${new Date().getFullYear() - 2}-12`, 'annual'),
+      createEmptyPeriod(yearOptions[2]?.value || `${new Date().getFullYear() - 3}-12`, 'annual')
     ]
   });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ResultData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +261,6 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
   // 更新表单数据
   const updateFormData = useCallback((field: keyof FormData, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // BUG3: 手机号校验
     if (field === 'contactPhone') {
       const phone = String(value || '');
       if (phone && !/^\d{11}$/.test(phone)) {
@@ -177,6 +269,15 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         setPhoneError('');
       }
     }
+  }, []);
+
+  // 更新最新一期月份
+  const updateLatestMonth = useCallback((newMonth: string) => {
+    setFormData(prev => {
+      const newData = [...prev.financialData];
+      newData[0] = { ...newData[0], period: newMonth };
+      return { ...prev, latestMonth: newMonth, financialData: newData };
+    });
   }, []);
 
   // 更新问卷答案
@@ -196,7 +297,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
     });
   }, []);
 
-  // BUG3: 手机号校验函数
+  // 校验手机号
   const validatePhone = useCallback((phone: string): boolean => {
     if (!phone) return false;
     if (!/^\d{11}$/.test(phone)) {
@@ -207,9 +308,27 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
     return true;
   }, []);
 
+  // 检查可选期是否已开始填写
+  const isPeriodStarted = (index: number): boolean => {
+    if (index === 0) return true; // 最新一期始终为必填
+    const d = formData.financialData[index];
+    return d.revenue > 0 || d.cost > 0 || d.profit > 0 || d.vatPaid > 0 || 
+           d.incomeTaxPaid > 0 || d.totalAssets > 0 || d.totalLiabilities > 0 ||
+           d.receivables > 0 || d.inventory > 0 || d.advanceReceipts > 0;
+  };
+
+  // 检查可选期是否已填完整（用于提示）
+  const isPeriodComplete = (index: number): boolean => {
+    if (index === 0) {
+      const d = formData.financialData[index];
+      return d.revenue > 0 && d.cost > 0 && d.profit > 0;
+    }
+    // 可选期只要开始填写了，至少填一个就算开始
+    return isPeriodStarted(index);
+  };
+
   // 提交检测
   const handleSubmit = async () => {
-    // BUG3: 提交前再次校验手机号
     if (!validatePhone(formData.contactPhone)) {
       return;
     }
@@ -218,7 +337,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
     setError(null);
     
     try {
-      // 构建问卷对象（兼容两种格式）
+      // 构建问卷对象
       const questionnaire: Record<string, { answer: string; score: number }> = {};
       Object.entries(formData.invoiceAnswers).forEach(([k, v]) => {
         const q = INVOICE_QUESTIONS.find(item => item.id === k);
@@ -241,8 +360,8 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         questionnaire[`4.${idx}`] = { answer: q?.options[0] || '', score: v };
       });
       
-      // 只发送有数据的年份
-      const validFinancialData = formData.financialData.filter(d => d.revenue > 0);
+      // 只发送有数据的期
+      const validFinancialData = formData.financialData.filter(d => d.revenue > 0 || d.profit > 0);
       
       const response = await fetch('/api/risk-v4-submit', {
         method: 'POST',
@@ -259,18 +378,8 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           publicPrivateAnswers: formData.publicPrivateAnswers,
           taxPolicyAnswers: formData.taxPolicyAnswers,
           questionnaire,
-          financialData: validFinancialData.length > 0 ? validFinancialData : [{
-            year: currentYear,
-            revenue: formData.financialData[0].revenue,
-            cost: formData.financialData[0].cost,
-            profit: formData.financialData[0].profit,
-            vatPaid: formData.financialData[0].vatPaid,
-            incomeTaxPaid: formData.financialData[0].incomeTaxPaid,
-            totalAssets: formData.financialData[0].totalAssets,
-            totalLiabilities: formData.financialData[0].totalLiabilities,
-            receivables: formData.financialData[0].receivables,
-            advanceReceipts: formData.financialData[0].advanceReceipts
-          }]
+          period: formData.latestMonth, // 最新一期月份作为所属期
+          financialData: validFinancialData.length > 0 ? validFinancialData : [formData.financialData[0]]
         })
       });
       
@@ -302,7 +411,9 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
       case 4:
         return TAX_POLICY_QUESTIONS.every(q => formData.taxPolicyAnswers[q.id] !== undefined);
       case 5:
-        return formData.financialData[0].revenue > 0 && formData.financialData[0].cost > 0 && formData.financialData[0].profit > 0;
+        // 最新一期必填字段
+        const latest = formData.financialData[0];
+        return latest.revenue > 0 && latest.cost > 0 && latest.profit > 0;
       default:
         return true;
     }
@@ -521,9 +632,10 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           </div>
         );
 
-      case 5: // 财务数据 - BUG2: 删除Excel上传，纯手工填列+悬浮提示
+      case 5: // 财务数据 - 4期分层设计
         const latestData = formData.financialData[0];
-        const calculateMetrics = (d: typeof latestData) => ({
+        
+        const calculateMetrics = (d: FinancialPeriod) => ({
           grossMargin: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0,
           netMargin: d.revenue > 0 ? (d.profit / d.revenue) * 100 : 0,
           vatRate: d.revenue > 0 ? (d.vatPaid / d.revenue) * 100 : 0,
@@ -532,76 +644,133 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         });
         const metrics = calculateMetrics(latestData);
         
+        // 渲染单个财务期间
+        const renderFinancialPeriod = (periodIndex: number, isLatest: boolean) => {
+          const period = formData.financialData[periodIndex];
+          const started = isPeriodStarted(periodIndex);
+          const periodLabel = isLatest 
+            ? '最新一期（月度）' 
+            : period.period;
+          const required = periodIndex === 0;
+          
+          return (
+            <div key={periodIndex} className={`border rounded-xl p-4 mb-4 ${isLatest ? 'border-[#2563EB] bg-[#EFF6FF]/30' : 'border-[#E5E7EB] bg-white'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className={`font-medium ${isLatest ? 'text-[#2563EB]' : 'text-[#1A1A2E]'}`}>
+                  {periodLabel}
+                  {required && <span className="text-[#EF4444] ml-1">*</span>}
+                  {!required && started && <span className="text-[#F59E0B] text-sm ml-2">（已开始填写）</span>}
+                  {!required && !started && <span className="text-[#9CA3AF] text-sm ml-2">（可选）</span>}
+                </h4>
+                {!isLatest && started && (
+                  <button 
+                    onClick={() => {
+                      setFormData(prev => {
+                        const newData = [...prev.financialData];
+                        newData[periodIndex] = createEmptyPeriod(period.period, 'annual');
+                        return { ...prev, financialData: newData };
+                      });
+                    }}
+                    className="text-[#9CA3AF] hover:text-[#EF4444] text-sm"
+                  >
+                    清除
+                  </button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {[
+                  { key: 'revenue', label: '营业收入(万元)', required: true },
+                  { key: 'cost', label: '营业成本(万元)', required: true },
+                  { key: 'profit', label: '利润总额(万元)', required: true },
+                  { key: 'vatPaid', label: '实缴增值税(万元)', required: true },
+                  { key: 'incomeTaxPaid', label: '实缴所得税(万元)', required: true },
+                  { key: 'totalAssets', label: '总资产(万元)', required: true },
+                  { key: 'totalLiabilities', label: '总负债(万元)', required: true },
+                  { key: 'receivables', label: '应收账款(万元)', required: false },
+                  { key: 'inventory', label: '期末存货(万元)', required: false },
+                  { key: 'advanceReceipts', label: '预收账款(万元)', required: false }
+                ].map((field) => {
+                  const fieldKey = `${periodIndex}-${field.key}`;
+                  const isRequired = required || (started && field.required);
+                  
+                  return (
+                    <div key={field.key} className="relative">
+                      <label className="block text-xs text-[#666666] mb-1">
+                        {field.label}
+                        {isRequired && <span className="text-[#EF4444] ml-0.5">*</span>}
+                      </label>
+                      <input
+                        type="number"
+                        value={period[field.key as keyof FinancialPeriod] as number || ''}
+                        onChange={(e) => updateFinancialData(periodIndex, field.key, parseFloat(e.target.value) || 0)}
+                        onFocus={() => setFocusedField(fieldKey)}
+                        onBlur={() => setFocusedField(null)}
+                        placeholder="0"
+                        className="w-full bg-white border border-[#E5E7EB] rounded px-3 py-2 text-[#1A1A2E] text-sm focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                      />
+                      {focusedField === fieldKey && FIELD_HINTS[field.key] && (
+                        <div className="absolute left-0 top-full mt-1 p-2 bg-[#1A1A2E] text-white text-xs rounded-lg shadow-lg z-10 whitespace-nowrap">
+                          {FIELD_HINTS[field.key]}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        };
+        
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
               <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">关键财务数据</h2>
-              <p className="text-[#666666]">填写最近年度（必填）和前1-2年数据（选填），系统将自动计算趋势</p>
+              <p className="text-[#666666]">填写最近月度数据（必填）和历年12月数据（可选）</p>
             </div>
             
-            {/* BUG2: 财务数据表格 - 纯手工填列+悬浮提示 */}
-            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-sm">
-              <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">手工填列</h4>
-              
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[#E5E7EB]">
-                      <th className="text-left py-3 px-2 text-[#666666] font-medium">字段</th>
-                      {formData.financialData.map((d, idx) => (
-                        <th key={idx} className={`text-center py-3 px-2 font-medium ${idx === 0 ? 'text-[#2563EB]' : 'text-[#666666]'}`}>
-                          {idx === 0 ? '最近年度（必填）' : '前一年（选填）'}<br />
-                          <span className="text-xs">{d.year}年</span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { key: 'revenue', label: '营业收入(万元)', required: true },
-                      { key: 'cost', label: '营业成本(万元)', required: true },
-                      { key: 'profit', label: '利润总额(万元)', required: true },
-                      { key: 'vatPaid', label: '实缴增值税(万元)', required: true },
-                      { key: 'incomeTaxPaid', label: '实缴所得税(万元)', required: true },
-                      { key: 'totalAssets', label: '总资产(万元)', required: true },
-                      { key: 'totalLiabilities', label: '总负债(万元)', required: true },
-                      { key: 'receivables', label: '应收账款(万元)', required: false },
-                      { key: 'advanceReceipts', label: '预收账款(万元)', required: false }
-                    ].map((field) => (
-                      <tr key={field.key} className="border-b border-[#F3F4F6]/50">
-                        <td className="py-3 px-2 text-[#666666]">
-                          {field.label}
-                          {field.required && <span className="text-[#EF4444] ml-1">*</span>}
-                        </td>
-                        {formData.financialData.map((d, idx) => (
-                          <td key={idx} className="py-2 px-2 relative">
-                            <input
-                              type="number"
-                              value={d[field.key as keyof typeof d] as number || ''}
-                              onChange={(e) => updateFinancialData(idx, field.key, parseFloat(e.target.value) || 0)}
-                              onFocus={() => setFocusedField(`${idx}-${field.key}`)}
-                              onBlur={() => setFocusedField(null)}
-                              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded px-3 py-2 text-[#1A1A2E] text-sm focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
-                            />
-                            {/* BUG2: 悬浮提示 */}
-                            {focusedField === `${idx}-${field.key}` && FIELD_HINTS[field.key] && (
-                              <div className="absolute left-0 top-full mt-1 p-2 bg-[#1A1A2E] text-white text-xs rounded-lg shadow-lg z-10 whitespace-nowrap">
-                                {FIELD_HINTS[field.key]}
-                              </div>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* 重要提示 */}
+            <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl p-4">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">💡</span>
+                <div className="text-[#1A1A2E]">
+                  <span className="font-medium">经营年度数据越完整，对比度越高，风险诊断越精准。</span>
+                  <span className="text-[#666666]"> 建议至少填报2期数据。</span>
+                </div>
               </div>
+            </div>
+            
+            {/* 最新一期月份选择器 */}
+            <div className="bg-white border border-[#2563EB] rounded-xl p-4">
+              <div className="flex items-center gap-4">
+                <label className="text-[#1A1A2E] font-medium">数据所属月份</label>
+                <select
+                  value={formData.latestMonth}
+                  onChange={(e) => updateLatestMonth(e.target.value)}
+                  className="bg-white border border-[#E5E7EB] rounded px-4 py-2 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
+                >
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            {/* 最新一期（必填） */}
+            {renderFinancialPeriod(0, true)}
+            
+            {/* 3个年度（可选） */}
+            <div className="space-y-4">
+              <h4 className="text-[#666666] font-medium">年度数据（可选）</h4>
+              {renderFinancialPeriod(1, false)}
+              {renderFinancialPeriod(2, false)}
+              {renderFinancialPeriod(3, false)}
             </div>
             
             {/* 自动计算指标 */}
             {latestData.revenue > 0 && (
               <div className="bg-gradient-to-r from-[#EFF6FF] to-[#EDE9FE] border border-[#BFDBFE] rounded-xl p-6 shadow-sm">
-                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">自动计算指标（最近年度）</h4>
+                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">自动计算指标（最新一期）</h4>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-[#2563EB]">{metrics.grossMargin.toFixed(1)}%</div>
@@ -629,8 +798,12 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           </div>
         );
 
-      case 6: // 结果页 - BUG1: 安全访问所有属性
+      case 6: // 结果页
         if (!result) return null;
+        
+        const { count: dataCount, msg: completenessMsg } = result.dataCompleteness 
+          ? { count: result.dataCompleteness, msg: result.dataCompletenessMsg }
+          : getDataCompleteness(result.trendData?.map(t => ({ revenue: t.revenue, profit: t.revenue * (t.netMargin / 100) } as FinancialPeriod)) || []);
         
         const riskColors: Record<string, { bg: string; border: string; text: string }> = {
           '低风险': { bg: 'bg-[#D1FAE5]', border: 'border-[#10B981]', text: 'text-[#059669]' },
@@ -640,6 +813,11 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         };
         const colorConfig = riskColors[result.overallRiskLevel] || riskColors['中风险'];
         
+        // 计算百分制等价分
+        const percentageScore = result.maxScore > 0 
+          ? ((result.riskScore / result.maxScore) * 100).toFixed(1) 
+          : '0';
+        
         return (
           <div className="space-y-8">
             <div className="text-center">
@@ -647,6 +825,15 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               <p className="text-[#666666]">基于《智控征管》预警模型 × 金税四期公开参数</p>
               <p className="text-[#9CA3AF] text-sm mt-1">检测ID: {result.riskId || 'N/A'}</p>
             </div>
+            
+            {/* 数据完整度说明 */}
+            {completenessMsg && (
+              <div className={`rounded-xl p-4 text-center ${dataCount === 1 ? 'bg-[#FEF3C7] border border-[#FCD34D]' : 'bg-[#EFF6FF] border border-[#BFDBFE]'}`}>
+                <p className={`text-sm ${dataCount === 1 ? 'text-[#92400E]' : 'text-[#1E40AF]'}`}>
+                  {dataCount === 1 && '⚠️ '}{completenessMsg}
+                </p>
+              </div>
+            )}
             
             {/* 综合风险等级 */}
             <div className={`${colorConfig.bg} border-2 ${colorConfig.border} rounded-2xl p-8 text-center`}>
@@ -656,6 +843,11 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
                 <div className="text-2xl text-[#9CA3AF] mx-2">/</div>
                 <div className="text-2xl text-[#666666]">{result.maxScore ?? 115}</div>
                 <div className={`text-3xl font-bold ml-4 ${colorConfig.text}`}>{result.overallRiskLevel || '未知'}</div>
+              </div>
+              <div className="mt-4 text-[#666666]">
+                <span className="text-lg">百分制等价分：</span>
+                <span className="text-2xl font-bold text-[#2563EB]">{percentageScore}</span>
+                <span className="text-lg">分</span>
               </div>
             </div>
             
@@ -679,19 +871,23 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               </div>
             </div>
             
-            {/* 3年数据对比表格 */}
-            {result.trendData && result.trendData.length > 0 && (
+            {/* 趋势分析表格 */}
+            {result.trendData && result.trendData.length > 0 ? (
               <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-sm">
-                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">财务指标趋势分析</h4>
+                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">
+                  {result.trendData.length === 1 ? '财务指标分析' : '财务指标趋势分析'}
+                </h4>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[#E5E7EB]">
                         <th className="text-left py-3 px-3 text-[#666666] font-medium">指标</th>
                         {result.trendData.map((d, idx) => (
-                          <th key={idx} className="text-center py-3 px-3 font-medium text-[#1A1A2E]">{d.year}年</th>
+                          <th key={idx} className="text-center py-3 px-3 font-medium text-[#1A1A2E]">{d.period}</th>
                         ))}
-                        <th className="text-center py-3 px-3 text-[#666666] font-medium">趋势</th>
+                        {result.trendData.length > 1 && (
+                          <th className="text-center py-3 px-3 text-[#666666] font-medium">趋势</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -712,21 +908,27 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
                               </td>
                             );
                           })}
-                          <td className="py-3 px-3 text-center">
-                            {result.trendData.length > 1 && result.trendData[0]?.trends?.[field.key] && (
-                              <span className={`text-lg ${
-                                result.trendData[0].trends[field.key] === '↗' ? 'text-[#DC2626]' :
-                                result.trendData[0].trends[field.key] === '↘' ? 'text-[#059669]' : 'text-[#9CA3AF]'
-                              }`}>
-                                {result.trendData[0].trends[field.key]}
-                              </span>
-                            )}
-                          </td>
+                          {result.trendData.length > 1 && (
+                            <td className="py-3 px-3 text-center">
+                              {result.trendData[0]?.trends?.[field.key] && (
+                                <span className={`text-lg ${
+                                  result.trendData[0].trends[field.key] === '↗' ? 'text-[#DC2626]' :
+                                  result.trendData[0].trends[field.key] === '↘' ? 'text-[#059669]' : 'text-[#9CA3AF]'
+                                }`}>
+                                  {result.trendData[0].trends[field.key]}
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+              </div>
+            ) : (
+              <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-6 text-center">
+                <p className="text-[#666666]">数据不足，无法进行趋势分析</p>
               </div>
             )}
             
@@ -833,7 +1035,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
       )}
       
       <div className={compact ? '' : 'max-w-4xl mx-auto px-4'}>
-        {/* 步骤指示器 - BUG4: 蓝色系简洁风格 */}
+        {/* 步骤指示器 */}
         {currentStep < 6 && (
           <div className="flex items-center justify-center gap-2 mb-8 overflow-x-auto pb-2">
             {STEPS.map((step, idx) => (
@@ -851,7 +1053,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           </div>
         )}
         
-        {/* 内容区 - BUG4: 白色卡片+淡阴影 */}
+        {/* 内容区 */}
         <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 md:p-8 shadow-sm">
           {error && (
             <div className="mb-6 p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg text-[#DC2626]">{error}</div>
