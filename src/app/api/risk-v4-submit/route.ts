@@ -567,13 +567,14 @@ export async function POST(request: NextRequest) {
         }
         
         if (key.startsWith('1.')) {
-          if (invoiceAnswers[key] === undefined) invoiceAnswers[key] = score;
+          // BUG9：允许覆盖，确保questionnaire格式优先
+          invoiceAnswers[key] = score;
         } else if (key.startsWith('2.')) {
-          if (revenueCostAnswers[key] === undefined) revenueCostAnswers[key] = score;
+          revenueCostAnswers[key] = score;
         } else if (key.startsWith('3.')) {
-          if (publicPrivateAnswers[key] === undefined) publicPrivateAnswers[key] = score;
+          publicPrivateAnswers[key] = score;
         } else if (key.startsWith('4.')) {
-          if (taxPolicyAnswers[key] === undefined) taxPolicyAnswers[key] = score;
+          taxPolicyAnswers[key] = score;
         }
       });
     }
@@ -624,8 +625,10 @@ export async function POST(request: NextRequest) {
         incomeTaxPaid: getNumber(d.incomeTaxPaid),
         totalAssets: getNumber(d.totalAssets),
         totalLiabilities: getNumber(d.totalDebt || d.totalLiabilities),
-        receivables: getNumber(d.accountsReceivable),
-        advanceReceipts: getNumber(d.advanceReceipts)
+        // BUG8：从receivables或accountsReceivable字段提取
+        receivables: getNumber(d.receivables || d.accountsReceivable),
+        advanceReceipts: getNumber(d.advanceReceipts || d.advanceReceivable),
+        inventory: getNumber(d.inventory)
       }));
     }
     
@@ -636,6 +639,9 @@ export async function POST(request: NextRequest) {
     const contactPerson = body.contactPerson || body.basicInfo?.contactName || '';
     const contactPhone = body.contactPhone || body.basicInfo?.contactPhone || '';
     const customerEmail = body.customerEmail || body.basicInfo?.email || '';
+    
+    // BUG7：所属期使用请求体中的period值
+    const period = body.period || body.basicInfo?.period || detectionTime.split(' ')[0];
     
     // 计算风险
     const riskResult = calculateRisk(
@@ -698,17 +704,8 @@ export async function POST(request: NextRequest) {
       moduleScores: riskResult.moduleScores
     });
     
-    // 年度财务数据
-    fields['年度财务数据'] = JSON.stringify(financialData.map(d => ({
-      year: d.year,
-      revenue: d.revenue,
-      cost: d.cost,
-      profit: d.profit,
-      vatPaid: d.vatPaid,
-      incomeTaxPaid: d.incomeTaxPaid,
-      totalAssets: d.totalAssets,
-      totalLiabilities: d.totalLiabilities
-    })));
+    // 年度财务数据 - 完整存储3年数据
+    fields['年度财务数据'] = JSON.stringify(financialData);
     
     // 财务指标
     fields['财务指标'] = JSON.stringify(latestMetrics);
