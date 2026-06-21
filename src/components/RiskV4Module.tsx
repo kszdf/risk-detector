@@ -106,6 +106,19 @@ const TAX_POLICY_QUESTIONS = [
   { id: 't5', question: '近3年是否被稽查/纳税评估？', options: ['否', '是但无问题', '是且有补税/处罚'], scores: [0, 1, 3] }
 ];
 
+// ============== 财务字段提示信息 ==============
+const FIELD_HINTS: Record<string, string> = {
+  revenue: '资产负债表附注或利润表第一行「营业收入」',
+  cost: '利润表「营业成本」',
+  profit: '利润表「利润总额」（税前利润）',
+  vatPaid: '增值税申报表主表「应纳税额」或「已缴税额」',
+  incomeTaxPaid: '企业所得税年度申报表「实际应纳所得税额」',
+  totalAssets: '资产负债表「资产总计」',
+  totalLiabilities: '资产负债表「负债合计」',
+  receivables: '资产负债表「应收账款」',
+  advanceReceipts: '资产负债表「预收款项」或「合同负债」'
+};
+
 // ============== 步骤配置 ==============
 const STEPS = [
   { id: 1, name: '基本信息', icon: '1' },
@@ -119,6 +132,8 @@ const STEPS = [
 export default function RiskV4Module({ compact = false, onBack }: { compact?: boolean; onBack?: () => void }) {
   const [currentStep, setCurrentStep] = useState(1);
   const currentYear = new Date().getFullYear();
+  const [phoneError, setPhoneError] = useState('');
+  const [focusedField, setFocusedField] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     enterpriseName: '',
@@ -140,7 +155,6 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ResultData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   // 计算问卷得分
   const moduleScores = useMemo(() => {
@@ -154,6 +168,15 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
   // 更新表单数据
   const updateFormData = useCallback((field: keyof FormData, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // BUG3: 手机号校验
+    if (field === 'contactPhone') {
+      const phone = String(value || '');
+      if (phone && !/^\d{11}$/.test(phone)) {
+        setPhoneError('请输入11位手机号码');
+      } else {
+        setPhoneError('');
+      }
+    }
   }, []);
 
   // 更新问卷答案
@@ -173,64 +196,24 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
     });
   }, []);
 
-  // 处理Excel上传
-  const handleExcelUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    
-    setIsUploading(true);
-    const formDataUpload = new FormData();
-    Array.from(files).forEach(file => {
-      formDataUpload.append('files', file);
-    });
-    
-    try {
-      const response = await fetch('/api/parse-excel', {
-        method: 'POST',
-        body: formDataUpload
-      });
-      const data = await response.json();
-      
-      if (data.success && data.data && data.data.length > 0) {
-        setFormData(prev => {
-          const newData = [...prev.financialData];
-          data.data.forEach((parsed: {
-            revenue?: number;
-            cost?: number;
-            profit?: number;
-            vatPaid?: number;
-            incomeTaxPaid?: number;
-            totalAssets?: number;
-            totalLiabilities?: number;
-            receivables?: number;
-            advanceReceipts?: number;
-          }, idx: number) => {
-            if (idx < newData.length) {
-              newData[idx] = {
-                ...newData[idx],
-                revenue: parsed.revenue || newData[idx].revenue,
-                cost: parsed.cost || newData[idx].cost,
-                profit: parsed.profit || newData[idx].profit,
-                vatPaid: parsed.vatPaid || newData[idx].vatPaid,
-                incomeTaxPaid: parsed.incomeTaxPaid || newData[idx].incomeTaxPaid,
-                totalAssets: parsed.totalAssets || newData[idx].totalAssets,
-                totalLiabilities: parsed.totalLiabilities || newData[idx].totalLiabilities,
-                receivables: parsed.receivables ?? newData[idx].receivables,
-                advanceReceipts: parsed.advanceReceipts ?? newData[idx].advanceReceipts
-              };
-            }
-          });
-          return { ...prev, financialData: newData };
-        });
-      }
-    } catch (err) {
-      console.error('Excel解析失败:', err);
-    } finally {
-      setIsUploading(false);
+  // BUG3: 手机号校验函数
+  const validatePhone = useCallback((phone: string): boolean => {
+    if (!phone) return false;
+    if (!/^\d{11}$/.test(phone)) {
+      setPhoneError('请输入11位手机号码');
+      return false;
     }
-  };
+    setPhoneError('');
+    return true;
+  }, []);
 
   // 提交检测
   const handleSubmit = async () => {
+    // BUG3: 提交前再次校验手机号
+    if (!validatePhone(formData.contactPhone)) {
+      return;
+    }
+    
     setIsSubmitting(true);
     setError(null);
     
@@ -238,22 +221,22 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
       // 构建问卷对象（兼容两种格式）
       const questionnaire: Record<string, { answer: string; score: number }> = {};
       Object.entries(formData.invoiceAnswers).forEach(([k, v]) => {
-        const q = INVOICE_QUESTIONS.find(q => q.id === k);
+        const q = INVOICE_QUESTIONS.find(item => item.id === k);
         const idx = q ? INVOICE_QUESTIONS.indexOf(q) + 1 : 0;
         questionnaire[`1.${idx}`] = { answer: q?.options[v / 2] || '', score: v };
       });
       Object.entries(formData.revenueCostAnswers).forEach(([k, v]) => {
-        const q = REVENUE_COST_QUESTIONS.find(q => q.id === k);
+        const q = REVENUE_COST_QUESTIONS.find(item => item.id === k);
         const idx = q ? REVENUE_COST_QUESTIONS.indexOf(q) + 1 : 0;
         questionnaire[`2.${idx}`] = { answer: q?.options[v <= 2 ? (v / 2 > 0 ? 1 : 0) : 2] || '', score: v };
       });
       Object.entries(formData.publicPrivateAnswers).forEach(([k, v]) => {
-        const q = PUBLIC_PRIVATE_QUESTIONS.find(q => q.id === k);
+        const q = PUBLIC_PRIVATE_QUESTIONS.find(item => item.id === k);
         const idx = q ? PUBLIC_PRIVATE_QUESTIONS.indexOf(q) + 1 : 0;
         questionnaire[`3.${idx}`] = { answer: q?.options[0] || '', score: v };
       });
       Object.entries(formData.taxPolicyAnswers).forEach(([k, v]) => {
-        const q = TAX_POLICY_QUESTIONS.find(q => q.id === k);
+        const q = TAX_POLICY_QUESTIONS.find(item => item.id === k);
         const idx = q ? TAX_POLICY_QUESTIONS.indexOf(q) + 1 : 0;
         questionnaire[`4.${idx}`] = { answer: q?.options[0] || '', score: v };
       });
@@ -275,7 +258,6 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           revenueCostAnswers: formData.revenueCostAnswers,
           publicPrivateAnswers: formData.publicPrivateAnswers,
           taxPolicyAnswers: formData.taxPolicyAnswers,
-          // 兼容两种格式
           questionnaire,
           financialData: validFinancialData.length > 0 ? validFinancialData : [{
             year: currentYear,
@@ -311,7 +293,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
   const canProceed = useCallback(() => {
     switch (currentStep) {
       case 1:
-        return formData.contactPerson && formData.contactPhone && formData.industry && formData.revenueScale;
+        return formData.contactPerson && formData.contactPhone && formData.industry && formData.revenueScale && validatePhone(formData.contactPhone);
       case 2:
         return INVOICE_QUESTIONS.every(q => formData.invoiceAnswers[q.id] !== undefined);
       case 3:
@@ -324,7 +306,7 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
       default:
         return true;
     }
-  }, [currentStep, formData]);
+  }, [currentStep, formData, validatePhone]);
 
   // ============== 渲染步骤内容 ==============
   const renderStepContent = () => {
@@ -333,37 +315,38 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">基本信息与所属期</h2>
-              <p className="text-slate-400">填写企业信息，系统将根据行业匹配风险基准</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">基本信息与所属期</h2>
+              <p className="text-[#666666]">填写企业信息，系统将根据行业匹配风险基准</p>
             </div>
             
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm text-slate-400 mb-2">企业名称</label>
+                <label className="block text-sm text-[#666666] mb-2">企业名称</label>
                 <input type="text" value={formData.enterpriseName} onChange={(e) => updateFormData('enterpriseName', e.target.value)}
                   placeholder="选填，首次检测可不填"
-                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">联系人 <span className="text-red-400">*</span></label>
+                <label className="block text-sm text-[#666666] mb-2">联系人 <span className="text-[#EF4444]">*</span></label>
                 <input type="text" value={formData.contactPerson} onChange={(e) => updateFormData('contactPerson', e.target.value)}
-                  placeholder="必填" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+                  placeholder="必填" className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">联系电话 <span className="text-red-400">*</span></label>
+                <label className="block text-sm text-[#666666] mb-2">联系电话 <span className="text-[#EF4444]">*</span></label>
                 <input type="tel" value={formData.contactPhone} onChange={(e) => updateFormData('contactPhone', e.target.value)}
-                  placeholder="必填，手机号" className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+                  placeholder="必填，11位手机号" className={`w-full bg-white border rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 ${phoneError ? 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]/20' : 'border-[#E5E7EB] focus:border-[#2563EB] focus:ring-[#2563EB]/20'}`} />
+                {phoneError && <p className="text-[#EF4444] text-xs mt-1">{phoneError}</p>}
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">客户邮箱</label>
+                <label className="block text-sm text-[#666666] mb-2">客户邮箱</label>
                 <input type="email" value={formData.customerEmail} onChange={(e) => updateFormData('customerEmail', e.target.value)}
                   placeholder="选填，用于接收完整检测报告"
-                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">所属行业 <span className="text-red-400">*</span></label>
+                <label className="block text-sm text-[#666666] mb-2">所属行业 <span className="text-[#EF4444]">*</span></label>
                 <select value={formData.industry} onChange={(e) => updateFormData('industry', e.target.value)}
-                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none">
+                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20">
                   <option value="">请选择行业</option>
                   <option value="制造业">制造业</option>
                   <option value="批发零售业">批发零售业</option>
@@ -375,9 +358,9 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-2">年营收规模 <span className="text-red-400">*</span></label>
+                <label className="block text-sm text-[#666666] mb-2">年营收规模 <span className="text-[#EF4444]">*</span></label>
                 <select value={formData.revenueScale} onChange={(e) => updateFormData('revenueScale', e.target.value)}
-                  className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-blue-500 focus:outline-none">
+                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20">
                   <option value="">请选择规模</option>
                   <option value="500万以下">500万以下</option>
                   <option value="500-3000万">500-3000万</option>
@@ -388,12 +371,12 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
             </div>
             
             {formData.industry && (
-              <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <h4 className="text-blue-400 font-medium mb-2">📊 {formData.industry} 行业基准参考</h4>
+              <div className="mt-6 p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg">
+                <h4 className="text-[#2563EB] font-medium mb-2">{formData.industry} 行业基准参考</h4>
                 <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div><span className="text-slate-400">增值税税负率:</span><span className="text-white ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.vatRate || 2.0}%</span></div>
-                  <div><span className="text-slate-400">所得税贡献率:</span><span className="text-white ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.citRate || 1.5}%</span></div>
-                  <div><span className="text-slate-400">毛利率:</span><span className="text-white ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.grossMargin || 20}%</span></div>
+                  <div><span className="text-[#666666]">增值税税负率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.vatRate || 2.0}%</span></div>
+                  <div><span className="text-[#666666]">所得税贡献率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.citRate || 1.5}%</span></div>
+                  <div><span className="text-[#666666]">毛利率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.grossMargin || 20}%</span></div>
                 </div>
               </div>
             )}
@@ -404,21 +387,21 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">发票与资金流风险诊断</h2>
-              <p className="text-slate-400">权重30%，满分15分（加权后30分）</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">发票与资金流风险诊断</h2>
+              <p className="text-[#666666]">权重30%，满分15分（加权后30分）</p>
             </div>
             
             <div className="space-y-4">
               {INVOICE_QUESTIONS.map((q, idx) => (
-                <div key={q.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+                <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
                   <div className="flex items-start gap-3 mb-4">
-                    <span className="w-7 h-7 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                    <span className="text-white">{q.question}</span>
+                    <span className="w-7 h-7 bg-[#EFF6FF] text-[#2563EB] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
+                    <span className="text-[#1A1A2E]">{q.question}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {q.options.map((opt, optIdx) => (
                       <button key={optIdx} onClick={() => updateAnswer('invoiceAnswers', q.id, q.scores[optIdx])}
-                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.invoiceAnswers[q.id] === q.scores[optIdx] ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500'}`}>
+                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.invoiceAnswers[q.id] === q.scores[optIdx] ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
                         {opt}
                       </button>
                     ))}
@@ -427,10 +410,10 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               ))}
             </div>
             
-            <div className="mt-6 p-4 bg-slate-800/30 rounded-lg text-center">
-              <span className="text-slate-400">当前得分: </span>
-              <span className="text-blue-400 font-bold text-xl">{moduleScores.invoice}</span>
-              <span className="text-slate-400"> / 15分（加权后 {Math.round(moduleScores.invoice * 2)}分）</span>
+            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
+              <span className="text-[#666666]">当前得分: </span>
+              <span className="text-[#2563EB] font-bold text-xl">{moduleScores.invoice}</span>
+              <span className="text-[#666666]"> / 15分（加权后 {Math.round(moduleScores.invoice * 2)}分）</span>
             </div>
           </div>
         );
@@ -439,27 +422,27 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         return (
           <div className="space-y-8">
             <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">收入成本 + 公私账户风险</h2>
-              <p className="text-slate-400">权重50%，满分15分（加权后50分）</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">收入成本 + 公私账户风险</h2>
+              <p className="text-[#666666]">权重50%，满分15分（加权后50分）</p>
             </div>
             
             {/* 收入与成本 */}
             <div>
-              <h3 className="text-lg font-medium text-emerald-400 mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-sm">A</span>
+              <h3 className="text-lg font-medium text-[#059669] mb-4 flex items-center gap-2">
+                <span className="w-6 h-6 bg-[#D1FAE5] rounded-full flex items-center justify-center text-sm">A</span>
                 收入与成本合规风险（权重25%）
               </h3>
               <div className="space-y-4">
                 {REVENUE_COST_QUESTIONS.map((q, idx) => (
-                  <div key={q.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+                  <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
                     <div className="flex items-start gap-3 mb-4">
-                      <span className="w-7 h-7 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                      <span className="text-white">{q.question}</span>
+                      <span className="w-7 h-7 bg-[#D1FAE5] text-[#059669] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
+                      <span className="text-[#1A1A2E]">{q.question}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       {q.options.map((opt, optIdx) => (
                         <button key={optIdx} onClick={() => updateAnswer('revenueCostAnswers', q.id, q.scores[optIdx])}
-                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.revenueCostAnswers[q.id] === q.scores[optIdx] ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500'}`}>
+                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.revenueCostAnswers[q.id] === q.scores[optIdx] ? 'bg-[#D1FAE5] border-[#059669] text-[#059669]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
                           {opt}
                         </button>
                       ))}
@@ -471,21 +454,21 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
             
             {/* 公私账户 */}
             <div>
-              <h3 className="text-lg font-medium text-purple-400 mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center text-sm">B</span>
+              <h3 className="text-lg font-medium text-[#7C3AED] mb-4 flex items-center gap-2">
+                <span className="w-6 h-6 bg-[#EDE9FE] rounded-full flex items-center justify-center text-sm">B</span>
                 公私账户与股东风险（权重25%）
               </h3>
               <div className="space-y-4">
                 {PUBLIC_PRIVATE_QUESTIONS.map((q, idx) => (
-                  <div key={q.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+                  <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
                     <div className="flex items-start gap-3 mb-4">
-                      <span className="w-7 h-7 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                      <span className="text-white">{q.question}</span>
+                      <span className="w-7 h-7 bg-[#EDE9FE] text-[#7C3AED] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
+                      <span className="text-[#1A1A2E]">{q.question}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       {q.options.map((opt, optIdx) => (
                         <button key={optIdx} onClick={() => updateAnswer('publicPrivateAnswers', q.id, q.scores[optIdx])}
-                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.publicPrivateAnswers[q.id] === q.scores[optIdx] ? 'bg-purple-500/20 border-purple-500 text-purple-400' : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500'}`}>
+                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.publicPrivateAnswers[q.id] === q.scores[optIdx] ? 'bg-[#EDE9FE] border-[#7C3AED] text-[#7C3AED]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
                           {opt}
                         </button>
                       ))}
@@ -495,10 +478,10 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               </div>
             </div>
             
-            <div className="mt-6 p-4 bg-slate-800/30 rounded-lg text-center">
-              <span className="text-slate-400">当前得分: </span>
-              <span className="text-purple-400 font-bold text-xl">{moduleScores.revenueCost + moduleScores.publicPrivate}</span>
-              <span className="text-slate-400"> / 15分（加权后 {Math.round((moduleScores.revenueCost + moduleScores.publicPrivate) * 1.67)}分）</span>
+            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
+              <span className="text-[#666666]">当前得分: </span>
+              <span className="text-[#7C3AED] font-bold text-xl">{moduleScores.revenueCost + moduleScores.publicPrivate}</span>
+              <span className="text-[#666666]"> / 15分（加权后 {Math.round((moduleScores.revenueCost + moduleScores.publicPrivate) * 1.67)}分）</span>
             </div>
           </div>
         );
@@ -507,21 +490,21 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">税务申报与政策适用风险</h2>
-              <p className="text-slate-400">权重20%，满分15分（加权后20分）</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">税务申报与政策适用风险</h2>
+              <p className="text-[#666666]">权重20%，满分15分（加权后20分）</p>
             </div>
             
             <div className="space-y-4">
               {TAX_POLICY_QUESTIONS.map((q, idx) => (
-                <div key={q.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+                <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
                   <div className="flex items-start gap-3 mb-4">
-                    <span className="w-7 h-7 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                    <span className="text-white">{q.question}</span>
+                    <span className="w-7 h-7 bg-[#FEF3C7] text-[#D97706] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
+                    <span className="text-[#1A1A2E]">{q.question}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {q.options.map((opt, optIdx) => (
                       <button key={optIdx} onClick={() => updateAnswer('taxPolicyAnswers', q.id, q.scores[optIdx])}
-                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.taxPolicyAnswers[q.id] === q.scores[optIdx] ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-900/50 border-slate-600 text-slate-300 hover:border-slate-500'}`}>
+                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.taxPolicyAnswers[q.id] === q.scores[optIdx] ? 'bg-[#FEF3C7] border-[#D97706] text-[#D97706]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
                         {opt}
                       </button>
                     ))}
@@ -530,15 +513,15 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               ))}
             </div>
             
-            <div className="mt-6 p-4 bg-slate-800/30 rounded-lg text-center">
-              <span className="text-slate-400">当前得分: </span>
-              <span className="text-amber-400 font-bold text-xl">{moduleScores.taxPolicy}</span>
-              <span className="text-slate-400"> / 15分（加权后 {Math.round(moduleScores.taxPolicy * 1.33)}分）</span>
+            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
+              <span className="text-[#666666]">当前得分: </span>
+              <span className="text-[#D97706] font-bold text-xl">{moduleScores.taxPolicy}</span>
+              <span className="text-[#666666]"> / 15分（加权后 {Math.round(moduleScores.taxPolicy * 1.33)}分）</span>
             </div>
           </div>
         );
 
-      case 5: // 财务数据
+      case 5: // 财务数据 - BUG2: 删除Excel上传，纯手工填列+悬浮提示
         const latestData = formData.financialData[0];
         const calculateMetrics = (d: typeof latestData) => ({
           grossMargin: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0,
@@ -552,42 +535,21 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         return (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-white mb-2">关键财务数据</h2>
-              <p className="text-slate-400">上传近3年报表，系统将自动识别财务指标异动趋势</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">关键财务数据</h2>
+              <p className="text-[#666666]">填写最近年度（必填）和前1-2年数据（选填），系统将自动计算趋势</p>
             </div>
             
-            {/* Excel上传区域 */}
-            <div className="mb-8">
-              <label className="block text-sm text-slate-400 mb-3">方式一：上传Excel报表（推荐）</label>
-              <div className="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center hover:border-blue-500/50 transition-colors">
-                <input type="file" accept=".xlsx,.xls,.csv" multiple onChange={(e) => handleExcelUpload(e.target.files)}
-                  className="hidden" id="excel-upload" disabled={isUploading} />
-                <label htmlFor="excel-upload" className="cursor-pointer">
-                  {isUploading ? (
-                    <div className="text-blue-400">解析中...</div>
-                  ) : (
-                    <>
-                      <div className="text-4xl mb-3">📊</div>
-                      <div className="text-white mb-2">把你手上的报表文件拖进来</div>
-                      <div className="text-slate-400 text-sm">支持 Excel/CSV 文件，可多选</div>
-                    </>
-                  )}
-                </label>
-              </div>
-            </div>
-            
-            {/* 财务数据表格 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-              <h4 className="text-lg font-medium text-white mb-4">方式二：手动填列</h4>
-              <p className="text-sm text-slate-400 mb-4">填写最近年度（必填）和前1-2年数据（选填），系统将自动计算趋势</p>
+            {/* BUG2: 财务数据表格 - 纯手工填列+悬浮提示 */}
+            <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-sm">
+              <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">手工填列</h4>
               
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-700">
-                      <th className="text-left py-3 px-2 text-slate-400 font-medium">字段</th>
+                    <tr className="border-b border-[#E5E7EB]">
+                      <th className="text-left py-3 px-2 text-[#666666] font-medium">字段</th>
                       {formData.financialData.map((d, idx) => (
-                        <th key={idx} className={`text-center py-3 px-2 font-medium ${idx === 0 ? 'text-blue-400' : 'text-slate-400'}`}>
+                        <th key={idx} className={`text-center py-3 px-2 font-medium ${idx === 0 ? 'text-[#2563EB]' : 'text-[#666666]'}`}>
                           {idx === 0 ? '最近年度（必填）' : '前一年（选填）'}<br />
                           <span className="text-xs">{d.year}年</span>
                         </th>
@@ -596,30 +558,37 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
                   </thead>
                   <tbody>
                     {[
-                      { key: 'revenue', label: '营业收入(万元)', placeholder: '利润表第1行', required: true },
-                      { key: 'cost', label: '营业成本(万元)', placeholder: '利润表第2行', required: true },
-                      { key: 'profit', label: '利润总额(万元)', placeholder: '利润表倒数第3行', required: true },
-                      { key: 'vatPaid', label: '实缴增值税(万元)', placeholder: '纳税申报表', required: true },
-                      { key: 'incomeTaxPaid', label: '实缴所得税(万元)', placeholder: '纳税申报表', required: true },
-                      { key: 'totalAssets', label: '总资产(万元)', placeholder: '资产负债表', required: true },
-                      { key: 'totalLiabilities', label: '总负债(万元)', placeholder: '资产负债表', required: true },
-                      { key: 'receivables', label: '应收账款(万元)', placeholder: '资产负债表', required: false },
-                      { key: 'advanceReceipts', label: '预收账款(万元)', placeholder: '资产负债表', required: false }
+                      { key: 'revenue', label: '营业收入(万元)', required: true },
+                      { key: 'cost', label: '营业成本(万元)', required: true },
+                      { key: 'profit', label: '利润总额(万元)', required: true },
+                      { key: 'vatPaid', label: '实缴增值税(万元)', required: true },
+                      { key: 'incomeTaxPaid', label: '实缴所得税(万元)', required: true },
+                      { key: 'totalAssets', label: '总资产(万元)', required: true },
+                      { key: 'totalLiabilities', label: '总负债(万元)', required: true },
+                      { key: 'receivables', label: '应收账款(万元)', required: false },
+                      { key: 'advanceReceipts', label: '预收账款(万元)', required: false }
                     ].map((field) => (
-                      <tr key={field.key} className="border-b border-slate-700/50">
-                        <td className="py-3 px-2 text-slate-400">
+                      <tr key={field.key} className="border-b border-[#F3F4F6]/50">
+                        <td className="py-3 px-2 text-[#666666]">
                           {field.label}
-                          {field.required && <span className="text-red-400 ml-1">*</span>}
+                          {field.required && <span className="text-[#EF4444] ml-1">*</span>}
                         </td>
                         {formData.financialData.map((d, idx) => (
-                          <td key={idx} className="py-2 px-2">
+                          <td key={idx} className="py-2 px-2 relative">
                             <input
                               type="number"
                               value={d[field.key as keyof typeof d] as number || ''}
                               onChange={(e) => updateFinancialData(idx, field.key, parseFloat(e.target.value) || 0)}
-                              placeholder={field.placeholder}
-                              className="w-full bg-slate-900/50 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:border-blue-500 focus:outline-none"
+                              onFocus={() => setFocusedField(`${idx}-${field.key}`)}
+                              onBlur={() => setFocusedField(null)}
+                              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded px-3 py-2 text-[#1A1A2E] text-sm focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
                             />
+                            {/* BUG2: 悬浮提示 */}
+                            {focusedField === `${idx}-${field.key}` && FIELD_HINTS[field.key] && (
+                              <div className="absolute left-0 top-full mt-1 p-2 bg-[#1A1A2E] text-white text-xs rounded-lg shadow-lg z-10 whitespace-nowrap">
+                                {FIELD_HINTS[field.key]}
+                              </div>
+                            )}
                           </td>
                         ))}
                       </tr>
@@ -631,28 +600,28 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
             
             {/* 自动计算指标 */}
             {latestData.revenue > 0 && (
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-white mb-4">📊 自动计算指标（最近年度）</h4>
+              <div className="bg-gradient-to-r from-[#EFF6FF] to-[#EDE9FE] border border-[#BFDBFE] rounded-xl p-6 shadow-sm">
+                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">自动计算指标（最近年度）</h4>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{metrics.grossMargin.toFixed(1)}%</div>
-                    <div className="text-sm text-slate-400">毛利率</div>
+                    <div className="text-2xl font-bold text-[#2563EB]">{metrics.grossMargin.toFixed(1)}%</div>
+                    <div className="text-sm text-[#666666]">毛利率</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-emerald-400">{metrics.netMargin.toFixed(1)}%</div>
-                    <div className="text-sm text-slate-400">净利率</div>
+                    <div className="text-2xl font-bold text-[#059669]">{metrics.netMargin.toFixed(1)}%</div>
+                    <div className="text-sm text-[#666666]">净利率</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-amber-400">{metrics.vatRate.toFixed(2)}%</div>
-                    <div className="text-sm text-slate-400">增值税税负率</div>
+                    <div className="text-2xl font-bold text-[#D97706]">{metrics.vatRate.toFixed(2)}%</div>
+                    <div className="text-sm text-[#666666]">增值税税负率</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-400">{metrics.citRate.toFixed(2)}%</div>
-                    <div className="text-sm text-slate-400">所得税贡献率</div>
+                    <div className="text-2xl font-bold text-[#7C3AED]">{metrics.citRate.toFixed(2)}%</div>
+                    <div className="text-sm text-[#666666]">所得税贡献率</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-rose-400">{metrics.debtRatio.toFixed(1)}%</div>
-                    <div className="text-sm text-slate-400">资产负债率</div>
+                    <div className="text-2xl font-bold text-[#DC2626]">{metrics.debtRatio.toFixed(1)}%</div>
+                    <div className="text-sm text-[#666666]">资产负债率</div>
                   </div>
                 </div>
               </div>
@@ -660,69 +629,69 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           </div>
         );
 
-      case 6: // 结果页
+      case 6: // 结果页 - BUG1: 安全访问所有属性
         if (!result) return null;
         
-        const riskColors: Record<string, string> = {
-          '低风险': 'emerald',
-          '中风险': 'amber',
-          '高风险': 'orange',
-          '极高风险': 'red'
+        const riskColors: Record<string, { bg: string; border: string; text: string }> = {
+          '低风险': { bg: 'bg-[#D1FAE5]', border: 'border-[#10B981]', text: 'text-[#059669]' },
+          '中风险': { bg: 'bg-[#FEF3C7]', border: 'border-[#D97706]', text: 'text-[#D97706]' },
+          '高风险': { bg: 'bg-[#FED7AA]', border: 'border-[#EA580C]', text: 'text-[#EA580C]' },
+          '极高风险': { bg: 'bg-[#FEE2E2]', border: 'border-[#DC2626]', text: 'text-[#DC2626]' }
         };
-        const color = riskColors[result.overallRiskLevel] || 'amber';
+        const colorConfig = riskColors[result.overallRiskLevel] || riskColors['中风险'];
         
         return (
           <div className="space-y-8">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-2">税务风险智能检测报告</h2>
-              <p className="text-slate-400">基于《智控征管》预警模型 × 金税四期公开参数</p>
-              <p className="text-slate-500 text-sm mt-1">检测ID: {result.riskId}</p>
+              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">税务风险智能检测报告</h2>
+              <p className="text-[#666666]">基于《智控征管》预警模型 × 金税四期公开参数</p>
+              <p className="text-[#9CA3AF] text-sm mt-1">检测ID: {result.riskId || 'N/A'}</p>
             </div>
             
             {/* 综合风险等级 */}
-            <div className={`bg-${color}-500/10 border-2 border-${color}-500/50 rounded-2xl p-8 text-center`}>
-              <div className={`inline-flex items-center gap-3 px-6 py-4 rounded-2xl border-2 bg-${color}-500/20`}>
-                <div className={`text-6xl font-bold text-${color}-400`}>{result.riskScore}</div>
-                <div className="text-xl text-slate-300">分</div>
-                <div className="text-2xl text-slate-500 mx-2">/</div>
-                <div className="text-2xl text-slate-400">{result.maxScore}</div>
-                <div className="text-3xl font-bold ml-4 text-${color}-400">{result.overallRiskLevel}</div>
+            <div className={`${colorConfig.bg} border-2 ${colorConfig.border} rounded-2xl p-8 text-center`}>
+              <div className={`inline-flex items-center gap-3 px-6 py-4 rounded-2xl border-2 ${colorConfig.border}`}>
+                <div className={`text-6xl font-bold ${colorConfig.text}`}>{result.riskScore ?? 0}</div>
+                <div className="text-xl text-[#666666]">分</div>
+                <div className="text-2xl text-[#9CA3AF] mx-2">/</div>
+                <div className="text-2xl text-[#666666]">{result.maxScore ?? 115}</div>
+                <div className={`text-3xl font-bold ml-4 ${colorConfig.text}`}>{result.overallRiskLevel || '未知'}</div>
               </div>
             </div>
             
             {/* 模块得分 */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-blue-400">{result.weightedScores.invoice}</div>
-                <div className="text-sm text-slate-400">发票与资金流（加权分）</div>
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
+                <div className="text-2xl font-bold text-[#2563EB]">{result.weightedScores?.invoice ?? 0}</div>
+                <div className="text-sm text-[#666666]">发票与资金流（加权分）</div>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-emerald-400">{result.weightedScores.revenueCost}</div>
-                <div className="text-sm text-slate-400">收入与成本（加权分）</div>
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
+                <div className="text-2xl font-bold text-[#059669]">{result.weightedScores?.revenueCost ?? 0}</div>
+                <div className="text-sm text-[#666666]">收入与成本（加权分）</div>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-purple-400">{result.weightedScores.publicPrivate}</div>
-                <div className="text-sm text-slate-400">公私账户（加权分）</div>
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
+                <div className="text-2xl font-bold text-[#7C3AED]">{result.weightedScores?.publicPrivate ?? 0}</div>
+                <div className="text-sm text-[#666666]">公私账户（加权分）</div>
               </div>
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-amber-400">{result.weightedScores.taxPolicy}</div>
-                <div className="text-sm text-slate-400">税务申报（加权分）</div>
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
+                <div className="text-2xl font-bold text-[#D97706]">{result.weightedScores?.taxPolicy ?? 0}</div>
+                <div className="text-sm text-[#666666]">税务申报（加权分）</div>
               </div>
             </div>
             
-            {/* 3年数据对比表格（问题4） */}
+            {/* 3年数据对比表格 */}
             {result.trendData && result.trendData.length > 0 && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-white mb-4">📈 财务指标趋势分析</h4>
+              <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-sm">
+                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">财务指标趋势分析</h4>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left py-3 px-3 text-slate-400 font-medium">指标</th>
+                      <tr className="border-b border-[#E5E7EB]">
+                        <th className="text-left py-3 px-3 text-[#666666] font-medium">指标</th>
                         {result.trendData.map((d, idx) => (
-                          <th key={idx} className="text-center py-3 px-3 font-medium text-slate-300">{d.year}年</th>
+                          <th key={idx} className="text-center py-3 px-3 font-medium text-[#1A1A2E]">{d.year}年</th>
                         ))}
-                        <th className="text-center py-3 px-3 text-slate-400 font-medium">趋势</th>
+                        <th className="text-center py-3 px-3 text-[#666666] font-medium">趋势</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -733,21 +702,21 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
                         { key: 'citRate', label: '所得税贡献率', unit: '%', decimals: 2 },
                         { key: 'debtRatio', label: '资产负债率', unit: '%', decimals: 1 }
                       ].map(field => (
-                        <tr key={field.key} className="border-b border-slate-700/50">
-                          <td className="py-3 px-3 text-slate-400">{field.label}</td>
+                        <tr key={field.key} className="border-b border-[#F3F4F6]/50">
+                          <td className="py-3 px-3 text-[#666666]">{field.label}</td>
                           {result.trendData.map((d, idx) => {
                             const val = d[field.key as keyof typeof d] as number;
                             return (
-                              <td key={idx} className="py-3 px-3 text-center text-white">
+                              <td key={idx} className="py-3 px-3 text-center text-[#1A1A2E]">
                                 {(isNaN(val) ? 0 : val).toFixed(field.decimals)}{field.unit}
                               </td>
                             );
                           })}
                           <td className="py-3 px-3 text-center">
-                            {result.trendData.length > 1 && result.trendData[0].trends?.[field.key] && (
+                            {result.trendData.length > 1 && result.trendData[0]?.trends?.[field.key] && (
                               <span className={`text-lg ${
-                                result.trendData[0].trends[field.key] === '↗' ? 'text-red-400' :
-                                result.trendData[0].trends[field.key] === '↘' ? 'text-emerald-400' : 'text-slate-400'
+                                result.trendData[0].trends[field.key] === '↗' ? 'text-[#DC2626]' :
+                                result.trendData[0].trends[field.key] === '↘' ? 'text-[#059669]' : 'text-[#9CA3AF]'
                               }`}>
                                 {result.trendData[0].trends[field.key]}
                               </span>
@@ -761,87 +730,87 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
               </div>
             )}
             
-            {/* 趋势预警（问题3） */}
+            {/* 趋势预警 */}
             {result.trendWarnings && result.trendWarnings.length > 0 && (
-              <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-orange-400 mb-3">⚠️ 趋势预警</h4>
+              <div className="bg-[#FEF3C7] border border-[#FCD34D] rounded-xl p-6">
+                <h4 className="text-lg font-medium text-[#D97706] mb-3">趋势预警</h4>
                 <ul className="space-y-2">
                   {result.trendWarnings.map((w, idx) => (
-                    <li key={idx} className="text-orange-300 flex items-start gap-2">
-                      <span className="font-medium">[{w.label} +{w.score}分]</span>
-                      <span>{w.detail}</span>
+                    <li key={idx} className="text-[#92400E] flex items-start gap-2">
+                      <span className="font-medium">[{w.label || '预警'} +{w.score ?? 0}分]</span>
+                      <span>{w.detail || ''}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
             
-            {/* 交叉验证结果（问题6） */}
+            {/* 交叉验证结果 */}
             {result.crossValidation && result.crossValidation.length > 0 && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-red-400 mb-3">🔍 交叉验证矛盾</h4>
+              <div className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl p-6">
+                <h4 className="text-lg font-medium text-[#DC2626] mb-3">交叉验证矛盾</h4>
                 <ul className="space-y-2">
                   {result.crossValidation.filter(c => c.conflict).map((c, idx) => (
-                    <li key={idx} className="text-red-300 flex items-start gap-2">
+                    <li key={idx} className="text-[#991B1B] flex items-start gap-2">
                       <span>⚠️</span>
-                      <span><strong>{c.rule}:</strong> {c.detail}</span>
+                      <span><strong>{c.rule || ''}:</strong> {c.detail || ''}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
             
-            {/* 预估风险金额（问题2） */}
+            {/* 预估风险金额 */}
             {result.estimatedRiskAmount && result.estimatedRiskAmount.items && result.estimatedRiskAmount.items.length > 0 && (
-              <div className="bg-gradient-to-r from-red-500/20 to-amber-500/20 border border-red-500/30 rounded-xl p-6">
-                <h4 className="text-lg font-medium text-red-400 mb-4">💰 预估风险金额</h4>
+              <div className="bg-gradient-to-r from-[#FEE2E2] to-[#FEF3C7] border border-[#FCA5A5] rounded-xl p-6">
+                <h4 className="text-lg font-medium text-[#DC2626] mb-4">预估风险金额</h4>
                 <table className="w-full text-sm mb-4">
                   <thead>
-                    <tr className="border-b border-red-500/30">
-                      <th className="text-left py-2 text-slate-400">风险项</th>
-                      <th className="text-right py-2 text-slate-400">预估补税</th>
-                      <th className="text-right py-2 text-slate-400">罚款(0.5-5倍)</th>
+                    <tr className="border-b border-[#FCA5A5]/50">
+                      <th className="text-left py-2 text-[#666666]">风险项</th>
+                      <th className="text-right py-2 text-[#666666]">预估补税</th>
+                      <th className="text-right py-2 text-[#666666]">罚款(0.5-5倍)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {result.estimatedRiskAmount.items.map((item, idx) => (
-                      <tr key={idx} className="border-b border-red-500/20">
-                        <td className="py-2 text-red-300">{item.name}</td>
-                        <td className="py-2 text-right text-amber-300">{item.taxMin}-{item.taxMax}万元</td>
-                        <td className="py-2 text-right text-amber-300">{item.penaltyMin}-{item.penaltyMax}万元</td>
+                      <tr key={idx} className="border-b border-[#FCA5A5]/30">
+                        <td className="py-2 text-[#991B1B]">{item.name || '未知'}</td>
+                        <td className="py-2 text-right text-[#92400E]">{item.taxMin ?? 0}-{item.taxMax ?? 0}万元</td>
+                        <td className="py-2 text-right text-[#92400E]">{item.penaltyMin ?? 0}-{item.penaltyMax ?? 0}万元</td>
                       </tr>
                     ))}
                     <tr className="font-bold">
-                      <td className="py-2 text-white">合计</td>
-                      <td className="py-2 text-right text-amber-300">{result.estimatedRiskAmount.totalTaxMin}-{result.estimatedRiskAmount.totalTaxMax}万元</td>
-                      <td className="py-2 text-right text-amber-300">{result.estimatedRiskAmount.totalPenaltyMin}-{result.estimatedRiskAmount.totalPenaltyMax}万元</td>
+                      <td className="py-2 text-[#1A1A2E]">合计</td>
+                      <td className="py-2 text-right text-[#92400E]">{result.estimatedRiskAmount.totalTaxMin ?? 0}-{result.estimatedRiskAmount.totalTaxMax ?? 0}万元</td>
+                      <td className="py-2 text-right text-[#92400E]">{result.estimatedRiskAmount.totalPenaltyMin ?? 0}-{result.estimatedRiskAmount.totalPenaltyMax ?? 0}万元</td>
                     </tr>
                   </tbody>
                 </table>
-                <div className="bg-red-500/20 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-red-400">
-                    💡 预估总风险金额：{result.estimatedRiskAmount.totalMin}-{result.estimatedRiskAmount.totalMax}万元
+                <div className="bg-white/50 rounded-lg p-4 text-center">
+                  <div className="text-2xl font-bold text-[#DC2626]">
+                    预估总风险金额：{result.estimatedRiskAmount.totalMin ?? 0}-{result.estimatedRiskAmount.totalMax ?? 0}万元
                   </div>
-                  <div className="text-sm text-slate-400 mt-2">含补税+滞纳金（约18%）+罚款</div>
+                  <div className="text-sm text-[#666666] mt-2">含补税+滞纳金（约18%）+罚款</div>
                 </div>
               </div>
             )}
             
             {/* CTA */}
-            <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 rounded-xl p-6 text-center">
-              <div className="text-white font-bold text-lg mb-4">联系张老师，获取专业筹划方案 + 完整检测报告</div>
-              <div className="text-slate-400 mb-4">
+            <div className="bg-gradient-to-r from-[#EFF6FF] to-[#EDE9FE] border border-[#BFDBFE] rounded-xl p-6 text-center shadow-sm">
+              <div className="text-[#1A1A2E] font-bold text-lg mb-4">联系张老师，获取专业筹划方案 + 完整检测报告</div>
+              <div className="text-[#666666] mb-4">
                 <span className="text-xl mr-4">📞 138-1294-3969</span>
                 <span className="text-xl">✉️ zhanglaoshi@hgttax.com</span>
               </div>
-              <div className="text-sm text-slate-500">
-                报告状态: {result.reportStatus} | 检测时间: {new Date().toLocaleString('zh-CN')}
+              <div className="text-sm text-[#9CA3AF]">
+                报告状态: {result.reportStatus || '待审核'} | 检测时间: {new Date().toLocaleString('zh-CN')}
               </div>
             </div>
             
             {compact && onBack && (
               <div className="text-center">
-                <button onClick={onBack} className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">返回首页</button>
+                <button onClick={onBack} className="px-6 py-3 bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#1A1A2E] rounded-lg transition-colors">返回首页</button>
               </div>
             )}
           </div>
@@ -853,26 +822,26 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-[#F7F8FA]">
       {!compact && (
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">税智云·财税风险智能检测</h1>
-            <p className="text-slate-400">6分钟完成，基于《智控征管》预警模型</p>
+            <h1 className="text-3xl font-bold text-[#1A1A2E] mb-2">税智云·财税风险智能检测</h1>
+            <p className="text-[#666666]">6分钟完成，基于《智控征管》预警模型</p>
           </div>
         </div>
       )}
       
       <div className={compact ? '' : 'max-w-4xl mx-auto px-4'}>
-        {/* 步骤指示器 */}
+        {/* 步骤指示器 - BUG4: 蓝色系简洁风格 */}
         {currentStep < 6 && (
           <div className="flex items-center justify-center gap-2 mb-8 overflow-x-auto pb-2">
             {STEPS.map((step, idx) => (
               <React.Fragment key={step.id}>
-                {idx > 0 && <div className={`w-8 h-0.5 ${currentStep > step.id ? 'bg-blue-500' : 'bg-slate-700'}`} />}
+                {idx > 0 && <div className={`w-8 h-0.5 ${currentStep > step.id ? 'bg-[#2563EB]' : 'bg-[#E5E7EB]'}`} />}
                 <button onClick={() => step.id < currentStep && setCurrentStep(step.id)} disabled={step.id > currentStep}
-                  className={`flex flex-col items-center min-w-[60px] ${step.id === currentStep ? 'text-blue-400' : step.id < currentStep ? 'text-green-400 cursor-pointer' : 'text-slate-500'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${step.id === currentStep ? 'border-blue-500 bg-blue-500/20' : step.id < currentStep ? 'border-green-500 bg-green-500/20' : 'border-slate-600'}`}>
+                  className={`flex flex-col items-center min-w-[60px] ${step.id === currentStep ? 'text-[#2563EB]' : step.id < currentStep ? 'text-[#10B981] cursor-pointer' : 'text-[#9CA3AF]'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${step.id === currentStep ? 'border-[#2563EB] bg-[#EFF6FF]' : step.id < currentStep ? 'border-[#10B981] bg-[#D1FAE5]' : 'border-[#E5E7EB]'}`}>
                     {step.id < currentStep ? '✓' : step.icon}
                   </div>
                   <span className="text-xs mt-1 whitespace-nowrap">{step.name}</span>
@@ -882,10 +851,10 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
           </div>
         )}
         
-        {/* 内容区 */}
-        <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-6 md:p-8">
+        {/* 内容区 - BUG4: 白色卡片+淡阴影 */}
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 md:p-8 shadow-sm">
           {error && (
-            <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">{error}</div>
+            <div className="mb-6 p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg text-[#DC2626]">{error}</div>
           )}
           {renderStepContent()}
         </div>
@@ -894,18 +863,18 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
         {currentStep < 6 && (
           <div className="flex justify-between mt-6">
             <button onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))} disabled={currentStep === 1}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentStep === 1 ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}>
+              className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentStep === 1 ? 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed' : 'bg-white border border-[#E5E7EB] text-[#1A1A2E] hover:bg-[#F9FAFB]'}`}>
               上一步
             </button>
             
             {currentStep < 5 ? (
               <button onClick={() => setCurrentStep(prev => prev + 1)} disabled={!canProceed()}
-                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() ? 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`}>
+                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-sm' : 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed'}`}>
                 下一步
               </button>
             ) : (
               <button onClick={handleSubmit} disabled={!canProceed() || isSubmitting}
-                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() && !isSubmitting ? 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white' : 'bg-slate-700/50 text-slate-500 cursor-not-allowed'}`}>
+                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() && !isSubmitting ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-sm' : 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed'}`}>
                 {isSubmitting ? '提交检测中...' : '提交检测'}
               </button>
             )}
@@ -914,8 +883,8 @@ export default function RiskV4Module({ compact = false, onBack }: { compact?: bo
       </div>
       
       {!compact && (
-        <div className="text-center py-8 text-slate-500 text-sm">
-          由 <Link href="/" className="text-blue-400 hover:underline">税智云</Link> 提供技术支持
+        <div className="text-center py-8 text-[#9CA3AF] text-sm">
+          由 <Link href="/" className="text-[#2563EB] hover:underline">税智云</Link> 提供技术支持
         </div>
       )}
     </div>
