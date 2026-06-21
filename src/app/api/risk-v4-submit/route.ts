@@ -667,7 +667,7 @@ export async function POST(request: NextRequest) {
     fields['联系电话'] = contactPhone;
     fields['客户邮箱'] = customerEmail;
     fields['所属行业'] = industry;
-    fields['所属期'] = detectionTime.split(' ')[0];
+    fields['所属期'] = period;
     fields['年营收规模'] = revenueScale;
     
     // 财务数据（最新年度）
