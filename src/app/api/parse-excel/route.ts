@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import * as xlsx from 'xlsx';
 
 export const runtime = 'nodejs';
 
@@ -69,9 +70,6 @@ function findYearInRow(row: string[]): string | undefined {
 }
 
 async function parseExcelFile(buffer: Buffer): Promise<ParseResult[]> {
-  // 动态导入 xlsx
-  const xlsx = require('xlsx');
-  
   try {
     const workbook = xlsx.read(buffer, { type: 'buffer' });
     const results: ParseResult[] = [];
