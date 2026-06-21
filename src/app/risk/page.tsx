@@ -1,14 +1,26 @@
+'use client';
+
 import dynamic from 'next/dynamic';
 
-const RiskV4Module = dynamic(() => import('@/components/RiskV4Module'), {
-  ssr: false,
-  loading: () => (
-    <div className="min-h-screen bg-white flex items-center justify-center">
-      <div className="text-[#666666]">加载中...</div>
-    </div>
-  )
-});
+const RiskV4Module = dynamic(
+  () => import('@/components/RiskV4Module'),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh',
+        color: '#666',
+        fontSize: '16px'
+      }}>
+        加载中...
+      </div>
+    )
+  }
+);
 
 export default function RiskPage() {
-  return <RiskV4Module compact={true} />;
+  return <RiskV4Module />;
 }
