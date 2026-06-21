@@ -5,7 +5,7 @@ import Link from 'next/link';
 
 // ============== 类型定义 ==============
 interface FinancialPeriod {
-  period: string;  // "2026-04" 或 "2025-12"
+  period: string;
   type: 'latest' | 'annual';
   revenue: number;
   cost: number;
@@ -31,7 +31,7 @@ interface FormData {
   publicPrivateAnswers: Record<string, number>;
   taxPolicyAnswers: Record<string, number>;
   financialData: FinancialPeriod[];
-  latestMonth: string; // 最新一期月份，如 "2026-04"
+  latestMonth: string;
 }
 
 interface ResultData {
@@ -65,8 +65,8 @@ interface ResultData {
     totalMax: number;
   };
   reportContent: Record<string, unknown>;
-  dataCompleteness: number; // 数据期数
-  dataCompletenessMsg: string; // 数据完整度说明
+  dataCompleteness: number;
+  dataCompletenessMsg: string;
 }
 
 // ============== 行业基准数据 ==============
@@ -136,43 +136,85 @@ const STEPS = [
   { id: 5, name: '财务数据', icon: '5' }
 ];
 
-// ============== 工具函数 ==============
-function getYearOptions(): { value: string; label: string }[] {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  return [
-    { value: `${currentYear - 1}-12`, label: `${currentYear - 1}年12月` },
-    { value: `${currentYear - 2}-12`, label: `${currentYear - 2}年12月` },
-    { value: `${currentYear - 3}-12`, label: `${currentYear - 3}年12月` }
-  ];
+// ============== 安全工具函数 ==============
+function safeGetYearOptions(): { value: string; label: string }[] {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    if (typeof currentYear !== 'number' || currentYear < 2000) {
+      return [
+        { value: '2025-12', label: '2025年12月' },
+        { value: '2024-12', label: '2024年12月' },
+        { value: '2023-12', label: '2023年12月' }
+      ];
+    }
+    return [
+      { value: `${currentYear - 1}-12`, label: `${currentYear - 1}年12月` },
+      { value: `${currentYear - 2}-12`, label: `${currentYear - 2}年12月` },
+      { value: `${currentYear - 3}-12`, label: `${currentYear - 3}年12月` }
+    ];
+  } catch {
+    return [
+      { value: '2025-12', label: '2025年12月' },
+      { value: '2024-12', label: '2024年12月' },
+      { value: '2023-12', label: '2023年12月' }
+    ];
+  }
 }
 
-function getMonthOptions(): { value: string; label: string }[] {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-12
-  
-  const options: { value: string; label: string }[] = [];
-  
-  // 最近2个月
-  for (let i = 2; i >= 1; i--) {
-    let month = currentMonth - i;
+function safeGetMonthOptions(): { value: string; label: string }[] {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    if (typeof currentYear !== 'number' || typeof currentMonth !== 'number') {
+      return [{ value: '2026-04', label: '2026年4月' }, { value: '2026-05', label: '2026年5月' }];
+    }
+    
+    const options: { value: string; label: string }[] = [];
+    for (let i = 2; i >= 1; i--) {
+      let month = currentMonth - i;
+      let year = currentYear;
+      if (month <= 0) {
+        month += 12;
+        year -= 1;
+      }
+      const value = `${year}-${String(month).padStart(2, '0')}`;
+      const label = `${year}年${month}月`;
+      options.push({ value, label });
+    }
+    return options;
+  } catch {
+    return [{ value: '2026-04', label: '2026年4月' }, { value: '2026-05', label: '2026年5月' }];
+  }
+}
+
+function safeGetDefaultLatestMonth(): string {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    if (typeof currentYear !== 'number' || typeof currentMonth !== 'number') {
+      return '2026-04';
+    }
+    
+    let month = currentMonth - 2;
     let year = currentYear;
     if (month <= 0) {
       month += 12;
       year -= 1;
     }
-    const value = `${year}-${String(month).padStart(2, '0')}`;
-    const label = `${year}年${month}月`;
-    options.push({ value, label });
+    return `${year}-${String(month).padStart(2, '0')}`;
+  } catch {
+    return '2026-04';
   }
-  
-  return options;
 }
 
-function createEmptyPeriod(period: string, type: 'latest' | 'annual'): FinancialPeriod {
+function safeCreateEmptyPeriod(period: string, type: 'latest' | 'annual'): FinancialPeriod {
   return {
-    period,
+    period: period || '2026-04',
     type,
     revenue: 0,
     cost: 0,
@@ -187,908 +229,803 @@ function createEmptyPeriod(period: string, type: 'latest' | 'annual'): Financial
   };
 }
 
-function getDataCompleteness(data: FinancialPeriod[]): { count: number; msg: string } {
-  const filledCount = data.filter(d => d.revenue > 0 || d.profit > 0).length;
-  
-  if (filledCount === 1) {
-    return { count: 1, msg: '本次检测仅基于单期数据，无法进行趋势分析。建议补充年度数据以获取更精准诊断。' };
-  } else if (filledCount === 2) {
-    return { count: 2, msg: '基于2期数据对比，已识别同比变化趋势。补充更多年度数据可提升诊断精度。' };
-  } else if (filledCount === 3) {
-    return { count: 3, msg: '基于3期数据对比，趋势分析可信度较高。' };
-  } else if (filledCount >= 4) {
-    return { count: 4, msg: '基于4期完整数据，趋势分析最为精准，诊断结果参考价值最高。' };
-  }
-  return { count: filledCount, msg: '' };
-}
-
 // ============== 主组件 ==============
 export default function RiskV4Module({ compact = false, onBack }: { compact?: boolean; onBack?: () => void }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [phoneError, setPhoneError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
   
-  // 初始化最新一期月份（默认当前月份-2）
-  const getDefaultLatestMonth = (): string => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    let month = currentMonth - 2;
-    let year = currentYear;
-    if (month <= 0) {
-      month += 12;
-      year -= 1;
-    }
-    return `${year}-${String(month).padStart(2, '0')}`;
-  };
+  // 预计算选项（只在客户端执行）
+  const yearOptions = useMemo(() => safeGetYearOptions(), []);
+  const monthOptions = useMemo(() => safeGetMonthOptions(), []);
+  const defaultLatestMonth = useMemo(() => safeGetDefaultLatestMonth(), []);
   
-  const monthOptions = getMonthOptions();
-  const yearOptions = getYearOptions();
+  // 初始化formData
+  const getInitialFormData = useCallback((): FormData => {
+    const defaultYear = safeGetYearOptions();
+    const defaultMonth = safeGetDefaultLatestMonth();
+    
+    return {
+      enterpriseName: '',
+      contactPerson: '',
+      contactPhone: '',
+      customerEmail: '',
+      industry: '',
+      revenueScale: '',
+      invoiceAnswers: {},
+      revenueCostAnswers: {},
+      publicPrivateAnswers: {},
+      taxPolicyAnswers: {},
+      latestMonth: defaultMonth,
+      financialData: [
+        safeCreateEmptyPeriod(defaultMonth, 'latest'),
+        safeCreateEmptyPeriod(defaultYear[0]?.value || '2025-12', 'annual'),
+        safeCreateEmptyPeriod(defaultYear[1]?.value || '2024-12', 'annual'),
+        safeCreateEmptyPeriod(defaultYear[2]?.value || '2023-12', 'annual')
+      ]
+    };
+  }, []);
   
-  const [formData, setFormData] = useState<FormData>({
-    enterpriseName: '',
-    contactPerson: '',
-    contactPhone: '',
-    customerEmail: '',
-    industry: '',
-    revenueScale: '',
-    invoiceAnswers: {},
-    revenueCostAnswers: {},
-    publicPrivateAnswers: {},
-    taxPolicyAnswers: {},
-    latestMonth: getDefaultLatestMonth(),
-    financialData: [
-      createEmptyPeriod(getDefaultLatestMonth(), 'latest'),
-      createEmptyPeriod(yearOptions[0]?.value || `${new Date().getFullYear() - 1}-12`, 'annual'),
-      createEmptyPeriod(yearOptions[1]?.value || `${new Date().getFullYear() - 2}-12`, 'annual'),
-      createEmptyPeriod(yearOptions[2]?.value || `${new Date().getFullYear() - 3}-12`, 'annual')
-    ]
-  });
+  const [formData, setFormData] = useState<FormData>(getInitialFormData);
   
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<ResultData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // 计算问卷得分
-  const moduleScores = useMemo(() => {
-    const invoice = Object.values(formData.invoiceAnswers).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    const revenueCost = Object.values(formData.revenueCostAnswers).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    const publicPrivate = Object.values(formData.publicPrivateAnswers).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    const taxPolicy = Object.values(formData.taxPolicyAnswers).reduce((sum, v) => sum + (Number(v) || 0), 0);
-    return { invoice, revenueCost, publicPrivate, taxPolicy };
-  }, [formData]);
-
-  // 更新表单数据
-  const updateFormData = useCallback((field: keyof FormData, value: unknown) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (field === 'contactPhone') {
-      const phone = String(value || '');
-      if (phone && !/^\d{11}$/.test(phone)) {
-        setPhoneError('请输入11位手机号码');
-      } else {
-        setPhoneError('');
-      }
-    }
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [savedTopics, setSavedTopics] = useState<Array<{ id: string; title: string; createdAt: string }>>([]);
+  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
+  const [expandedRiskId, setExpandedRiskId] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+  
+  // 处理水合完成
+  useEffect(() => {
+    setIsHydrated(true);
   }, []);
-
-  // 更新最新一期月份
-  const updateLatestMonth = useCallback((newMonth: string) => {
-    setFormData(prev => {
-      const newData = [...prev.financialData];
-      newData[0] = { ...newData[0], period: newMonth };
-      return { ...prev, latestMonth: newMonth, financialData: newData };
-    });
-  }, []);
-
-  // 更新问卷答案
-  const updateAnswer = useCallback((module: 'invoiceAnswers' | 'revenueCostAnswers' | 'publicPrivateAnswers' | 'taxPolicyAnswers', id: string, score: number) => {
+  
+  // 计算数据完整度
+  const dataCompleteness = useMemo(() => {
+    if (!formData.financialData) return { count: 0, msg: '' };
+    const filledCount = formData.financialData.filter(d => d.revenue > 0 || d.profit > 0).length;
+    
+    if (filledCount === 0) return { count: 0, msg: '请填写至少一期财务数据' };
+    if (filledCount === 1) return { count: 1, msg: '本次检测仅基于单期数据，无法进行趋势分析。建议补充年度数据以获取更精准诊断。' };
+    if (filledCount === 2) return { count: 2, msg: '基于2期数据对比，已识别同比变化趋势。补充更多年度数据可提升诊断精度。' };
+    if (filledCount === 3) return { count: 3, msg: '基于3期数据对比，趋势分析可信度较高。' };
+    return { count: Math.min(filledCount, 4), msg: '基于4期完整数据，趋势分析最为精准，诊断结果参考价值最高。' };
+  }, [formData.financialData]);
+  
+  // 处理月份变更
+  const handleLatestMonthChange = useCallback((newMonth: string) => {
     setFormData(prev => ({
       ...prev,
-      [module]: { ...prev[module], [id]: score }
+      latestMonth: newMonth,
+      financialData: prev.financialData.map((item, idx) => 
+        idx === 0 ? { ...item, period: newMonth } : item
+      )
     }));
   }, []);
-
+  
+  // 检查可选期是否已开始填写
+  const checkAnnualPeriodStarted = useCallback((periodIndex: number): boolean => {
+    if (periodIndex <= 0 || !formData.financialData) return false;
+    const period = formData.financialData[periodIndex];
+    return period && (period.revenue > 0 || period.profit > 0 || period.totalAssets > 0);
+  }, [formData.financialData]);
+  
   // 更新财务数据
-  const updateFinancialData = useCallback((index: number, field: string, value: number) => {
+  const updateFinancialField = useCallback((periodIndex: number, field: keyof FinancialPeriod, value: string) => {
+    const numValue = parseFloat(value) || 0;
     setFormData(prev => {
       const newData = [...prev.financialData];
-      newData[index] = { ...newData[index], [field]: value };
+      newData[periodIndex] = { ...newData[periodIndex], [field]: numValue };
       return { ...prev, financialData: newData };
     });
   }, []);
-
-  // 校验手机号
-  const validatePhone = useCallback((phone: string): boolean => {
-    if (!phone) return false;
-    if (!/^\d{11}$/.test(phone)) {
-      setPhoneError('请输入11位手机号码');
-      return false;
-    }
-    setPhoneError('');
-    return true;
-  }, []);
-
-  // 检查可选期是否已开始填写
-  const isPeriodStarted = (index: number): boolean => {
-    if (index === 0) return true; // 最新一期始终为必填
-    const d = formData.financialData[index];
-    return d.revenue > 0 || d.cost > 0 || d.profit > 0 || d.vatPaid > 0 || 
-           d.incomeTaxPaid > 0 || d.totalAssets > 0 || d.totalLiabilities > 0 ||
-           d.receivables > 0 || d.inventory > 0 || d.advanceReceipts > 0;
-  };
-
-  // 检查可选期是否已填完整（用于提示）
-  const isPeriodComplete = (index: number): boolean => {
-    if (index === 0) {
-      const d = formData.financialData[index];
-      return d.revenue > 0 && d.cost > 0 && d.profit > 0;
-    }
-    // 可选期只要开始填写了，至少填一个就算开始
-    return isPeriodStarted(index);
-  };
-
-  // 提交检测
-  const handleSubmit = async () => {
-    if (!validatePhone(formData.contactPhone)) {
-      return;
-    }
+  
+  // 输入组件（带悬浮提示）
+  const FieldInput: React.FC<{
+    label: string;
+    value: number;
+    onChange: (value: string) => void;
+    fieldKey: string;
+    required?: boolean;
+    optional?: boolean;
+    periodStarted?: boolean;
+    periodIndex: number;
+    periodLabel: string;
+  }> = ({ label, value, onChange, fieldKey, required, optional, periodStarted, periodIndex, periodLabel }) => {
+    const isRequired = required || (optional && periodStarted);
+    const isFieldStarted = periodStarted && periodIndex > 0;
     
-    setIsSubmitting(true);
-    setError(null);
-    
-    try {
-      // 构建问卷对象
-      const questionnaire: Record<string, { answer: string; score: number }> = {};
-      Object.entries(formData.invoiceAnswers).forEach(([k, v]) => {
-        const q = INVOICE_QUESTIONS.find(item => item.id === k);
-        const idx = q ? INVOICE_QUESTIONS.indexOf(q) + 1 : 0;
-        questionnaire[`1.${idx}`] = { answer: q?.options[v / 2] || '', score: v };
-      });
-      Object.entries(formData.revenueCostAnswers).forEach(([k, v]) => {
-        const q = REVENUE_COST_QUESTIONS.find(item => item.id === k);
-        const idx = q ? REVENUE_COST_QUESTIONS.indexOf(q) + 1 : 0;
-        questionnaire[`2.${idx}`] = { answer: q?.options[v <= 2 ? (v / 2 > 0 ? 1 : 0) : 2] || '', score: v };
-      });
-      Object.entries(formData.publicPrivateAnswers).forEach(([k, v]) => {
-        const q = PUBLIC_PRIVATE_QUESTIONS.find(item => item.id === k);
-        const idx = q ? PUBLIC_PRIVATE_QUESTIONS.indexOf(q) + 1 : 0;
-        questionnaire[`3.${idx}`] = { answer: q?.options[0] || '', score: v };
-      });
-      Object.entries(formData.taxPolicyAnswers).forEach(([k, v]) => {
-        const q = TAX_POLICY_QUESTIONS.find(item => item.id === k);
-        const idx = q ? TAX_POLICY_QUESTIONS.indexOf(q) + 1 : 0;
-        questionnaire[`4.${idx}`] = { answer: q?.options[0] || '', score: v };
-      });
-      
-      // 只发送有数据的期
-      const validFinancialData = formData.financialData.filter(d => d.revenue > 0 || d.profit > 0);
-      
-      const response = await fetch('/api/risk-v4-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enterpriseName: formData.enterpriseName,
-          contactPerson: formData.contactPerson,
-          contactPhone: formData.contactPhone,
-          customerEmail: formData.customerEmail,
-          industry: formData.industry,
-          revenueScale: formData.revenueScale,
-          invoiceAnswers: formData.invoiceAnswers,
-          revenueCostAnswers: formData.revenueCostAnswers,
-          publicPrivateAnswers: formData.publicPrivateAnswers,
-          taxPolicyAnswers: formData.taxPolicyAnswers,
-          questionnaire,
-          period: formData.latestMonth, // 最新一期月份作为所属期
-          financialData: validFinancialData.length > 0 ? validFinancialData : [formData.financialData[0]]
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setResult(data);
-        setCurrentStep(6);
-      } else {
-        setError(data.error || '提交失败');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '提交失败');
-    } finally {
-      setIsSubmitting(false);
-    }
+    return (
+      <div className="mb-3">
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-sm font-medium text-[#333333]">{label}</span>
+          {isRequired && <span className="text-red-500">*</span>}
+          {optional && !isFieldStarted && <span className="text-xs text-[#666666] bg-gray-100 px-1.5 py-0.5 rounded">可选</span>}
+          {isFieldStarted && <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">必填</span>}
+        </div>
+        <div className="relative">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocusedField(`${periodIndex}-${fieldKey}`)}
+            onBlur={() => setFocusedField(null)}
+            placeholder="0.00"
+            className={`w-full px-3 py-2 text-sm border rounded-lg transition-all ${
+              isRequired && value === 0
+                ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-2 focus:ring-red-200'
+                : 'border-[#E5E7EB] bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100'
+            } text-[#333333] placeholder-[#999999]`}
+          />
+          {focusedField === `${periodIndex}-${fieldKey}` && FIELD_HINTS[fieldKey] && (
+            <div className="absolute z-50 left-0 top-full mt-1 px-3 py-2 bg-[#1A1A2E] text-white text-xs rounded-lg shadow-lg whitespace-nowrap">
+              {FIELD_HINTS[fieldKey]}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
-
-  // 验证步骤
-  const canProceed = useCallback(() => {
-    switch (currentStep) {
-      case 1:
-        return formData.contactPerson && formData.contactPhone && formData.industry && formData.revenueScale && validatePhone(formData.contactPhone);
-      case 2:
-        return INVOICE_QUESTIONS.every(q => formData.invoiceAnswers[q.id] !== undefined);
-      case 3:
-        return REVENUE_COST_QUESTIONS.every(q => formData.revenueCostAnswers[q.id] !== undefined) &&
-               PUBLIC_PRIVATE_QUESTIONS.every(q => formData.publicPrivateAnswers[q.id] !== undefined);
-      case 4:
-        return TAX_POLICY_QUESTIONS.every(q => formData.taxPolicyAnswers[q.id] !== undefined);
-      case 5:
-        // 最新一期必填字段
-        const latest = formData.financialData[0];
-        return latest.revenue > 0 && latest.cost > 0 && latest.profit > 0;
-      default:
-        return true;
-    }
-  }, [currentStep, formData, validatePhone]);
-
-  // ============== 渲染步骤内容 ==============
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1: // 基本信息
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">基本信息与所属期</h2>
-              <p className="text-[#666666]">填写企业信息，系统将根据行业匹配风险基准</p>
-            </div>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">企业名称</label>
-                <input type="text" value={formData.enterpriseName} onChange={(e) => updateFormData('enterpriseName', e.target.value)}
-                  placeholder="选填，首次检测可不填"
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
-              </div>
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">联系人 <span className="text-[#EF4444]">*</span></label>
-                <input type="text" value={formData.contactPerson} onChange={(e) => updateFormData('contactPerson', e.target.value)}
-                  placeholder="必填" className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
-              </div>
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">联系电话 <span className="text-[#EF4444]">*</span></label>
-                <input type="tel" value={formData.contactPhone} onChange={(e) => updateFormData('contactPhone', e.target.value)}
-                  placeholder="必填，11位手机号" className={`w-full bg-white border rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 ${phoneError ? 'border-[#EF4444] focus:border-[#EF4444] focus:ring-[#EF4444]/20' : 'border-[#E5E7EB] focus:border-[#2563EB] focus:ring-[#2563EB]/20'}`} />
-                {phoneError && <p className="text-[#EF4444] text-xs mt-1">{phoneError}</p>}
-              </div>
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">客户邮箱</label>
-                <input type="email" value={formData.customerEmail} onChange={(e) => updateFormData('customerEmail', e.target.value)}
-                  placeholder="选填，用于接收完整检测报告"
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] placeholder-[#9CA3AF] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20" />
-              </div>
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">所属行业 <span className="text-[#EF4444]">*</span></label>
-                <select value={formData.industry} onChange={(e) => updateFormData('industry', e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20">
-                  <option value="">请选择行业</option>
-                  <option value="制造业">制造业</option>
-                  <option value="批发零售业">批发零售业</option>
-                  <option value="建筑业">建筑业</option>
-                  <option value="商务服务业">商务服务业</option>
-                  <option value="生活服务业">生活服务业</option>
-                  <option value="科技互联网">科技互联网</option>
-                  <option value="其他">其他</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-[#666666] mb-2">年营收规模 <span className="text-[#EF4444]">*</span></label>
-                <select value={formData.revenueScale} onChange={(e) => updateFormData('revenueScale', e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-4 py-3 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20">
-                  <option value="">请选择规模</option>
-                  <option value="500万以下">500万以下</option>
-                  <option value="500-3000万">500-3000万</option>
-                  <option value="3000万-1亿">3000万-1亿</option>
-                  <option value="1亿以上">1亿以上</option>
-                </select>
-              </div>
-            </div>
-            
-            {formData.industry && (
-              <div className="mt-6 p-4 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg">
-                <h4 className="text-[#2563EB] font-medium mb-2">{formData.industry} 行业基准参考</h4>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div><span className="text-[#666666]">增值税税负率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.vatRate || 2.0}%</span></div>
-                  <div><span className="text-[#666666]">所得税贡献率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.citRate || 1.5}%</span></div>
-                  <div><span className="text-[#666666]">毛利率:</span><span className="text-[#1A1A2E] ml-2">{INDUSTRY_BENCHMARKS[formData.industry]?.grossMargin || 20}%</span></div>
-                </div>
-              </div>
-            )}
+  
+  // 渲染步骤1：基本信息
+  const renderStep1 = () => (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-[#333333] mb-1">
+          企业名称 <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={formData.enterpriseName}
+          onChange={(e) => setFormData({...formData, enterpriseName: e.target.value})}
+          placeholder="请输入企业名称"
+          className="w-full px-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 text-[#333333] placeholder-[#999999]"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-[#333333] mb-1">
+            联系人 <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={formData.contactPerson}
+            onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+            placeholder="请输入联系人姓名"
+            className="w-full px-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 text-[#333333] placeholder-[#999999]"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[#333333] mb-1">
+            联系电话 <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="tel"
+            value={formData.contactPhone}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+              setFormData({...formData, contactPhone: val});
+              if (val && val.length !== 11) {
+                setPhoneError('请输入11位手机号码');
+              } else {
+                setPhoneError('');
+              }
+            }}
+            placeholder="请输入手机号码"
+            className={`w-full px-4 py-2.5 text-sm border rounded-lg bg-white focus:ring-2 text-[#333333] placeholder-[#999999] ${
+              phoneError ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : 'border-[#E5E7EB] focus:border-[#2563EB] focus:ring-blue-100'
+            }`}
+          />
+          {phoneError && <p className="text-xs text-red-500 mt-1">{phoneError}</p>}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-[#333333] mb-1">
+          行业类型 <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={formData.industry}
+          onChange={(e) => setFormData({...formData, industry: e.target.value})}
+          className="w-full px-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 text-[#333333]"
+        >
+          <option value="">请选择行业类型</option>
+          <option value="制造业">制造业</option>
+          <option value="批发零售业">批发零售业</option>
+          <option value="建筑业">建筑业</option>
+          <option value="商务服务业">商务服务业</option>
+          <option value="生活服务业">生活服务业</option>
+          <option value="科技互联网">科技互联网</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-[#333333] mb-1">
+          年营收规模 <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={formData.revenueScale}
+          onChange={(e) => setFormData({...formData, revenueScale: e.target.value})}
+          className="w-full px-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 text-[#333333]"
+        >
+          <option value="">请选择年营收规模</option>
+          <option value="500万以下">500万以下</option>
+          <option value="500-2000万">500-2000万</option>
+          <option value="2000万-1亿">2000万-1亿</option>
+          <option value="1亿以上">1亿以上</option>
+        </select>
+      </div>
+    </div>
+  );
+  
+  // 渲染步骤2-4：问卷模块
+  const renderQuestionnaire = (
+    questions: typeof INVOICE_QUESTIONS,
+    answers: Record<string, number>,
+    setAnswer: (id: string, score: number) => void,
+    moduleName: string
+  ) => (
+    <div className="space-y-4">
+      {questions.map((q) => (
+        <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+          <p className="text-sm font-medium text-[#1A1A2E] mb-3 leading-relaxed">{q.question}</p>
+          <div className="grid grid-cols-1 gap-2">
+            {q.options.map((opt, idx) => (
+              <button
+                key={idx}
+                onClick={() => setAnswer(q.id, q.scores[idx])}
+                className={`w-full px-4 py-2.5 text-sm text-left rounded-lg border transition-all ${
+                  answers[q.id] === q.scores[idx]
+                    ? 'border-[#2563EB] bg-blue-50 text-[#2563EB] font-medium'
+                    : 'border-[#E5E7EB] bg-white text-[#333333] hover:border-[#2563EB]/50'
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
           </div>
-        );
-
-      case 2: // 发票与资金流风险
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">发票与资金流风险诊断</h2>
-              <p className="text-[#666666]">权重30%，满分15分（加权后30分）</p>
-            </div>
-            
-            <div className="space-y-4">
-              {INVOICE_QUESTIONS.map((q, idx) => (
-                <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <span className="w-7 h-7 bg-[#EFF6FF] text-[#2563EB] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                    <span className="text-[#1A1A2E]">{q.question}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {q.options.map((opt, optIdx) => (
-                      <button key={optIdx} onClick={() => updateAnswer('invoiceAnswers', q.id, q.scores[optIdx])}
-                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.invoiceAnswers[q.id] === q.scores[optIdx] ? 'bg-[#EFF6FF] border-[#2563EB] text-[#2563EB]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
-              <span className="text-[#666666]">当前得分: </span>
-              <span className="text-[#2563EB] font-bold text-xl">{moduleScores.invoice}</span>
-              <span className="text-[#666666]"> / 15分（加权后 {Math.round(moduleScores.invoice * 2)}分）</span>
-            </div>
-          </div>
-        );
-
-      case 3: // 收入成本 + 公私账户
-        return (
-          <div className="space-y-8">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">收入成本 + 公私账户风险</h2>
-              <p className="text-[#666666]">权重50%，满分15分（加权后50分）</p>
-            </div>
-            
-            {/* 收入与成本 */}
-            <div>
-              <h3 className="text-lg font-medium text-[#059669] mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#D1FAE5] rounded-full flex items-center justify-center text-sm">A</span>
-                收入与成本合规风险（权重25%）
-              </h3>
-              <div className="space-y-4">
-                {REVENUE_COST_QUESTIONS.map((q, idx) => (
-                  <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="w-7 h-7 bg-[#D1FAE5] text-[#059669] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                      <span className="text-[#1A1A2E]">{q.question}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {q.options.map((opt, optIdx) => (
-                        <button key={optIdx} onClick={() => updateAnswer('revenueCostAnswers', q.id, q.scores[optIdx])}
-                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.revenueCostAnswers[q.id] === q.scores[optIdx] ? 'bg-[#D1FAE5] border-[#059669] text-[#059669]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* 公私账户 */}
-            <div>
-              <h3 className="text-lg font-medium text-[#7C3AED] mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 bg-[#EDE9FE] rounded-full flex items-center justify-center text-sm">B</span>
-                公私账户与股东风险（权重25%）
-              </h3>
-              <div className="space-y-4">
-                {PUBLIC_PRIVATE_QUESTIONS.map((q, idx) => (
-                  <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="w-7 h-7 bg-[#EDE9FE] text-[#7C3AED] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                      <span className="text-[#1A1A2E]">{q.question}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {q.options.map((opt, optIdx) => (
-                        <button key={optIdx} onClick={() => updateAnswer('publicPrivateAnswers', q.id, q.scores[optIdx])}
-                          className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.publicPrivateAnswers[q.id] === q.scores[optIdx] ? 'bg-[#EDE9FE] border-[#7C3AED] text-[#7C3AED]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
-              <span className="text-[#666666]">当前得分: </span>
-              <span className="text-[#7C3AED] font-bold text-xl">{moduleScores.revenueCost + moduleScores.publicPrivate}</span>
-              <span className="text-[#666666]"> / 15分（加权后 {Math.round((moduleScores.revenueCost + moduleScores.publicPrivate) * 1.67)}分）</span>
-            </div>
-          </div>
-        );
-
-      case 4: // 税务申报
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">税务申报与政策适用风险</h2>
-              <p className="text-[#666666]">权重20%，满分15分（加权后20分）</p>
-            </div>
-            
-            <div className="space-y-4">
-              {TAX_POLICY_QUESTIONS.map((q, idx) => (
-                <div key={q.id} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <span className="w-7 h-7 bg-[#FEF3C7] text-[#D97706] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">{idx + 1}</span>
-                    <span className="text-[#1A1A2E]">{q.question}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {q.options.map((opt, optIdx) => (
-                      <button key={optIdx} onClick={() => updateAnswer('taxPolicyAnswers', q.id, q.scores[optIdx])}
-                        className={`px-4 py-3 rounded-lg border text-sm transition-all ${formData.taxPolicyAnswers[q.id] === q.scores[optIdx] ? 'bg-[#FEF3C7] border-[#D97706] text-[#D97706]' : 'bg-[#F9FAFB] border-[#E5E7EB] text-[#666666] hover:border-[#D1D5DB]'}`}>
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 p-4 bg-[#F9FAFB] rounded-lg text-center">
-              <span className="text-[#666666]">当前得分: </span>
-              <span className="text-[#D97706] font-bold text-xl">{moduleScores.taxPolicy}</span>
-              <span className="text-[#666666]"> / 15分（加权后 {Math.round(moduleScores.taxPolicy * 1.33)}分）</span>
-            </div>
-          </div>
-        );
-
-      case 5: // 财务数据 - 4期分层设计
-        const latestData = formData.financialData[0];
+        </div>
+      ))}
+    </div>
+  );
+  
+  // 渲染步骤5：财务数据
+  const renderStep5 = () => {
+    const periodLabels = [
+      '最新一期月度数据',
+      yearOptions[0]?.label || '2025年12月',
+      yearOptions[1]?.label || '2024年12月',
+      yearOptions[2]?.label || '2023年12月'
+    ];
+    
+    const periodTypes: ('latest' | 'annual')[] = ['latest', 'annual', 'annual', 'annual'];
+    
+    return (
+      <div className="space-y-6">
+        {/* 重要提示 */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+          <span className="text-xl">💡</span>
+          <p className="text-sm text-[#2563EB] leading-relaxed">
+            经营年度数据越完整，对比度越高，风险诊断越精准。建议至少填报2期数据。
+          </p>
+        </div>
         
-        const calculateMetrics = (d: FinancialPeriod) => ({
-          grossMargin: d.revenue > 0 ? ((d.revenue - d.cost) / d.revenue) * 100 : 0,
-          netMargin: d.revenue > 0 ? (d.profit / d.revenue) * 100 : 0,
-          vatRate: d.revenue > 0 ? (d.vatPaid / d.revenue) * 100 : 0,
-          citRate: d.revenue > 0 ? (d.incomeTaxPaid / d.revenue) * 100 : 0,
-          debtRatio: d.totalAssets > 0 ? (d.totalLiabilities / d.totalAssets) * 100 : 0
-        });
-        const metrics = calculateMetrics(latestData);
+        {/* 数据完整度 */}
+        {dataCompleteness.count > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-xl">📊</span>
+            <div>
+              <p className="text-sm text-amber-800 font-medium mb-1">当前数据完整度：{dataCompleteness.count}/4期</p>
+              <p className="text-sm text-amber-700">{dataCompleteness.msg}</p>
+            </div>
+          </div>
+        )}
         
-        // 渲染单个财务期间
-        const renderFinancialPeriod = (periodIndex: number, isLatest: boolean) => {
-          const period = formData.financialData[periodIndex];
-          const started = isPeriodStarted(periodIndex);
-          const periodLabel = isLatest 
-            ? '最新一期（月度）' 
-            : period.period;
-          const required = periodIndex === 0;
+        {/* 最新一期月份选择 */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+          <label className="block text-sm font-medium text-[#333333] mb-3">
+            数据所属月份 <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={formData.latestMonth}
+            onChange={(e) => handleLatestMonthChange(e.target.value)}
+            className="w-full px-4 py-2.5 text-sm border border-[#E5E7EB] rounded-lg bg-white focus:border-[#2563EB] focus:ring-2 focus:ring-blue-100 text-[#333333]"
+          >
+            {monthOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        
+        {/* 4期财务数据 */}
+        {formData.financialData.map((period, periodIndex) => {
+          const isLatest = periodTypes[periodIndex] === 'latest';
+          const periodStarted = checkAnnualPeriodStarted(periodIndex);
+          const periodLabel = periodLabels[periodIndex];
+          
+          const fields: Array<{ key: keyof FinancialPeriod; label: string }> = [
+            { key: 'revenue', label: '营业收入' },
+            { key: 'cost', label: '营业成本' },
+            { key: 'profit', label: '利润总额' },
+            { key: 'vatPaid', label: '实缴增值税' },
+            { key: 'incomeTaxPaid', label: '实缴所得税' },
+            { key: 'totalAssets', label: '总资产' },
+            { key: 'totalLiabilities', label: '总负债' },
+            { key: 'receivables', label: '应收账款' },
+            { key: 'inventory', label: '期末存货' },
+            { key: 'advanceReceipts', label: '预收账款' }
+          ];
           
           return (
-            <div key={periodIndex} className={`border rounded-xl p-4 mb-4 ${isLatest ? 'border-[#2563EB] bg-[#EFF6FF]/30' : 'border-[#E5E7EB] bg-white'}`}>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className={`font-medium ${isLatest ? 'text-[#2563EB]' : 'text-[#1A1A2E]'}`}>
-                  {periodLabel}
-                  {required && <span className="text-[#EF4444] ml-1">*</span>}
-                  {!required && started && <span className="text-[#F59E0B] text-sm ml-2">（已开始填写）</span>}
-                  {!required && !started && <span className="text-[#9CA3AF] text-sm ml-2">（可选）</span>}
-                </h4>
-                {!isLatest && started && (
-                  <button 
-                    onClick={() => {
-                      setFormData(prev => {
-                        const newData = [...prev.financialData];
-                        newData[periodIndex] = createEmptyPeriod(period.period, 'annual');
-                        return { ...prev, financialData: newData };
-                      });
-                    }}
-                    className="text-[#9CA3AF] hover:text-[#EF4444] text-sm"
-                  >
-                    清除
-                  </button>
-                )}
+            <div key={periodIndex} className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+              <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4 flex items-center gap-2">
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  isLatest ? 'bg-[#2563EB] text-white' : 'bg-[#10B981] text-white'
+                }`}>
+                  {periodIndex + 1}
+                </span>
+                {periodLabel}
+                {isLatest && <span className="text-xs text-[#2563EB] bg-blue-100 px-2 py-0.5 rounded">必填</span>}
+              </h4>
+              
+              <div className="grid grid-cols-2 gap-x-4">
+                {fields.map(field => (
+                  <FieldInput
+                    key={field.key}
+                    label={field.label}
+                    value={period[field.key] as number}
+                    onChange={(val) => updateFinancialField(periodIndex, field.key, val)}
+                    fieldKey={field.key}
+                    required={isLatest}
+                    optional={!isLatest}
+                    periodStarted={periodStarted}
+                    periodIndex={periodIndex}
+                    periodLabel={periodLabel}
+                  />
+                ))}
               </div>
               
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                {[
-                  { key: 'revenue', label: '营业收入(万元)', required: true },
-                  { key: 'cost', label: '营业成本(万元)', required: true },
-                  { key: 'profit', label: '利润总额(万元)', required: true },
-                  { key: 'vatPaid', label: '实缴增值税(万元)', required: true },
-                  { key: 'incomeTaxPaid', label: '实缴所得税(万元)', required: true },
-                  { key: 'totalAssets', label: '总资产(万元)', required: true },
-                  { key: 'totalLiabilities', label: '总负债(万元)', required: true },
-                  { key: 'receivables', label: '应收账款(万元)', required: false },
-                  { key: 'inventory', label: '期末存货(万元)', required: false },
-                  { key: 'advanceReceipts', label: '预收账款(万元)', required: false }
-                ].map((field) => {
-                  const fieldKey = `${periodIndex}-${field.key}`;
-                  const isRequired = required || (started && field.required);
-                  
-                  return (
-                    <div key={field.key} className="relative">
-                      <label className="block text-xs text-[#666666] mb-1">
-                        {field.label}
-                        {isRequired && <span className="text-[#EF4444] ml-0.5">*</span>}
-                      </label>
-                      <input
-                        type="number"
-                        value={period[field.key as keyof FinancialPeriod] as number || ''}
-                        onChange={(e) => updateFinancialData(periodIndex, field.key, parseFloat(e.target.value) || 0)}
-                        onFocus={() => setFocusedField(fieldKey)}
-                        onBlur={() => setFocusedField(null)}
-                        placeholder="0"
-                        className="w-full bg-white border border-[#E5E7EB] rounded px-3 py-2 text-[#1A1A2E] text-sm focus:bg-white focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
-                      />
-                      {focusedField === fieldKey && FIELD_HINTS[field.key] && (
-                        <div className="absolute left-0 top-full mt-1 p-2 bg-[#1A1A2E] text-white text-xs rounded-lg shadow-lg z-10 whitespace-nowrap">
-                          {FIELD_HINTS[field.key]}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              {/* 单位提示 */}
+              <p className="text-xs text-[#666666] mt-3">单位：万元</p>
             </div>
           );
-        };
-        
-        return (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">关键财务数据</h2>
-              <p className="text-[#666666]">填写最近月度数据（必填）和历年12月数据（可选）</p>
+        })}
+      </div>
+    );
+  };
+  
+  // 渲染结果
+  const renderResult = () => {
+    if (!result) return null;
+    
+    const equivalentScore = result.maxScore > 0 
+      ? Math.round((result.riskScore / result.maxScore) * 1000) / 10 
+      : 0;
+    
+    return (
+      <div className="space-y-6">
+        {/* 结果头部 */}
+        <div className="bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] rounded-xl p-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm opacity-80 mb-1">综合风险等级</p>
+              <h3 className="text-3xl font-bold">{result.overallRiskLevel || '未知'}</h3>
             </div>
-            
-            {/* 重要提示 */}
-            <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl p-4">
-              <div className="flex items-start gap-2">
-                <span className="text-xl">💡</span>
-                <div className="text-[#1A1A2E]">
-                  <span className="font-medium">经营年度数据越完整，对比度越高，风险诊断越精准。</span>
-                  <span className="text-[#666666]"> 建议至少填报2期数据。</span>
-                </div>
-              </div>
+            <div className="text-right">
+              <p className="text-sm opacity-80 mb-1">综合得分</p>
+              <p className="text-4xl font-bold">{result.riskScore ?? 0}</p>
+              <p className="text-sm opacity-80">满分 {result.maxScore}</p>
+              <p className="text-sm mt-1 bg-white/20 px-2 py-0.5 rounded">
+                百分制：{equivalentScore}分
+              </p>
             </div>
-            
-            {/* 最新一期月份选择器 */}
-            <div className="bg-white border border-[#2563EB] rounded-xl p-4">
-              <div className="flex items-center gap-4">
-                <label className="text-[#1A1A2E] font-medium">数据所属月份</label>
-                <select
-                  value={formData.latestMonth}
-                  onChange={(e) => updateLatestMonth(e.target.value)}
-                  className="bg-white border border-[#E5E7EB] rounded px-4 py-2 text-[#1A1A2E] focus:border-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20"
-                >
-                  {monthOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            {/* 最新一期（必填） */}
-            {renderFinancialPeriod(0, true)}
-            
-            {/* 3个年度（可选） */}
-            <div className="space-y-4">
-              <h4 className="text-[#666666] font-medium">年度数据（可选）</h4>
-              {renderFinancialPeriod(1, false)}
-              {renderFinancialPeriod(2, false)}
-              {renderFinancialPeriod(3, false)}
-            </div>
-            
-            {/* 自动计算指标 */}
-            {latestData.revenue > 0 && (
-              <div className="bg-gradient-to-r from-[#EFF6FF] to-[#EDE9FE] border border-[#BFDBFE] rounded-xl p-6 shadow-sm">
-                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">自动计算指标（最新一期）</h4>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#2563EB]">{metrics.grossMargin.toFixed(1)}%</div>
-                    <div className="text-sm text-[#666666]">毛利率</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#059669]">{metrics.netMargin.toFixed(1)}%</div>
-                    <div className="text-sm text-[#666666]">净利率</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#D97706]">{metrics.vatRate.toFixed(2)}%</div>
-                    <div className="text-sm text-[#666666]">增值税税负率</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#7C3AED]">{metrics.citRate.toFixed(2)}%</div>
-                    <div className="text-sm text-[#666666]">所得税贡献率</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-[#DC2626]">{metrics.debtRatio.toFixed(1)}%</div>
-                    <div className="text-sm text-[#666666]">资产负债率</div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
-        );
-
-      case 6: // 结果页
-        if (!result) return null;
+        </div>
         
-        const { count: dataCount, msg: completenessMsg } = result.dataCompleteness 
-          ? { count: result.dataCompleteness, msg: result.dataCompletenessMsg }
-          : getDataCompleteness(result.trendData?.map(t => ({ revenue: t.revenue, profit: t.revenue * (t.netMargin / 100) } as FinancialPeriod)) || []);
+        {/* 数据完整度说明 */}
+        {result.dataCompletenessMsg && (
+          <div className={`rounded-xl p-4 flex items-start gap-3 ${
+            result.dataCompleteness === 1 
+              ? 'bg-amber-50 border border-amber-200' 
+              : result.dataCompleteness >= 3 
+                ? 'bg-green-50 border border-green-200' 
+                : 'bg-blue-50 border border-blue-200'
+          }`}>
+            <span className="text-xl">⚠️</span>
+            <p className={`text-sm ${
+              result.dataCompleteness === 1 ? 'text-amber-800' 
+                : result.dataCompleteness >= 3 ? 'text-green-800' 
+                : 'text-blue-800'
+            }`}>
+              {result.dataCompletenessMsg}
+            </p>
+          </div>
+        )}
         
-        const riskColors: Record<string, { bg: string; border: string; text: string }> = {
-          '低风险': { bg: 'bg-[#D1FAE5]', border: 'border-[#10B981]', text: 'text-[#059669]' },
-          '中风险': { bg: 'bg-[#FEF3C7]', border: 'border-[#D97706]', text: 'text-[#D97706]' },
-          '高风险': { bg: 'bg-[#FED7AA]', border: 'border-[#EA580C]', text: 'text-[#EA580C]' },
-          '极高风险': { bg: 'bg-[#FEE2E2]', border: 'border-[#DC2626]', text: 'text-[#DC2626]' }
-        };
-        const colorConfig = riskColors[result.overallRiskLevel] || riskColors['中风险'];
-        
-        // 计算百分制等价分
-        const percentageScore = result.maxScore > 0 
-          ? ((result.riskScore / result.maxScore) * 100).toFixed(1) 
-          : '0';
-        
-        return (
-          <div className="space-y-8">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-[#1A1A2E] mb-2">税务风险智能检测报告</h2>
-              <p className="text-[#666666]">基于《智控征管》预警模型 × 金税四期公开参数</p>
-              <p className="text-[#9CA3AF] text-sm mt-1">检测ID: {result.riskId || 'N/A'}</p>
-            </div>
-            
-            {/* 数据完整度说明 */}
-            {completenessMsg && (
-              <div className={`rounded-xl p-4 text-center ${dataCount === 1 ? 'bg-[#FEF3C7] border border-[#FCD34D]' : 'bg-[#EFF6FF] border border-[#BFDBFE]'}`}>
-                <p className={`text-sm ${dataCount === 1 ? 'text-[#92400E]' : 'text-[#1E40AF]'}`}>
-                  {dataCount === 1 && '⚠️ '}{completenessMsg}
+        {/* 模块得分 */}
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+          <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">各维度得分</h4>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { label: '发票与资金流', score: result.weightedScores?.invoice ?? 0, color: '#2563EB' },
+              { label: '收入与成本', score: result.weightedScores?.revenueCost ?? 0, color: '#10B981' },
+              { label: '公私账户', score: result.weightedScores?.publicPrivate ?? 0, color: '#F59E0B' },
+              { label: '税务申报', score: result.weightedScores?.taxPolicy ?? 0, color: '#8B5CF6' }
+            ].map(item => (
+              <div key={item.label} className="bg-gray-50 rounded-lg p-4">
+                <p className="text-xs text-[#666666] mb-1">{item.label}</p>
+                <p className="text-2xl font-bold" style={{ color: item.color }}>
+                  {item.score.toFixed(1)}
                 </p>
               </div>
-            )}
-            
-            {/* 综合风险等级 */}
-            <div className={`${colorConfig.bg} border-2 ${colorConfig.border} rounded-2xl p-8 text-center`}>
-              <div className={`inline-flex items-center gap-3 px-6 py-4 rounded-2xl border-2 ${colorConfig.border}`}>
-                <div className={`text-6xl font-bold ${colorConfig.text}`}>{result.riskScore ?? 0}</div>
-                <div className="text-xl text-[#666666]">分</div>
-                <div className="text-2xl text-[#9CA3AF] mx-2">/</div>
-                <div className="text-2xl text-[#666666]">{result.maxScore ?? 115}</div>
-                <div className={`text-3xl font-bold ml-4 ${colorConfig.text}`}>{result.overallRiskLevel || '未知'}</div>
-              </div>
-              <div className="mt-4 text-[#666666]">
-                <span className="text-lg">百分制等价分：</span>
-                <span className="text-2xl font-bold text-[#2563EB]">{percentageScore}</span>
-                <span className="text-lg">分</span>
-              </div>
-            </div>
-            
-            {/* 模块得分 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
-                <div className="text-2xl font-bold text-[#2563EB]">{result.weightedScores?.invoice ?? 0}</div>
-                <div className="text-sm text-[#666666]">发票与资金流（加权分）</div>
-              </div>
-              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
-                <div className="text-2xl font-bold text-[#059669]">{result.weightedScores?.revenueCost ?? 0}</div>
-                <div className="text-sm text-[#666666]">收入与成本（加权分）</div>
-              </div>
-              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
-                <div className="text-2xl font-bold text-[#7C3AED]">{result.weightedScores?.publicPrivate ?? 0}</div>
-                <div className="text-sm text-[#666666]">公私账户（加权分）</div>
-              </div>
-              <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 text-center shadow-sm">
-                <div className="text-2xl font-bold text-[#D97706]">{result.weightedScores?.taxPolicy ?? 0}</div>
-                <div className="text-sm text-[#666666]">税务申报（加权分）</div>
-              </div>
-            </div>
-            
-            {/* 趋势分析表格 */}
-            {result.trendData && result.trendData.length > 0 ? (
-              <div className="bg-white border border-[#E5E7EB] rounded-xl p-6 shadow-sm">
-                <h4 className="text-lg font-medium text-[#1A1A2E] mb-4">
-                  {result.trendData.length === 1 ? '财务指标分析' : '财务指标趋势分析'}
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[#E5E7EB]">
-                        <th className="text-left py-3 px-3 text-[#666666] font-medium">指标</th>
-                        {result.trendData.map((d, idx) => (
-                          <th key={idx} className="text-center py-3 px-3 font-medium text-[#1A1A2E]">{d.period}</th>
-                        ))}
-                        {result.trendData.length > 1 && (
-                          <th className="text-center py-3 px-3 text-[#666666] font-medium">趋势</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { key: 'grossMargin', label: '毛利率', unit: '%', decimals: 1 },
-                        { key: 'netMargin', label: '净利率', unit: '%', decimals: 1 },
-                        { key: 'vatRate', label: '增值税税负率', unit: '%', decimals: 2 },
-                        { key: 'citRate', label: '所得税贡献率', unit: '%', decimals: 2 },
-                        { key: 'debtRatio', label: '资产负债率', unit: '%', decimals: 1 }
-                      ].map(field => (
-                        <tr key={field.key} className="border-b border-[#F3F4F6]/50">
-                          <td className="py-3 px-3 text-[#666666]">{field.label}</td>
-                          {result.trendData.map((d, idx) => {
-                            const val = d[field.key as keyof typeof d] as number;
-                            return (
-                              <td key={idx} className="py-3 px-3 text-center text-[#1A1A2E]">
-                                {(isNaN(val) ? 0 : val).toFixed(field.decimals)}{field.unit}
-                              </td>
-                            );
-                          })}
-                          {result.trendData.length > 1 && (
-                            <td className="py-3 px-3 text-center">
-                              {result.trendData[0]?.trends?.[field.key] && (
-                                <span className={`text-lg ${
-                                  result.trendData[0].trends[field.key] === '↗' ? 'text-[#DC2626]' :
-                                  result.trendData[0].trends[field.key] === '↘' ? 'text-[#059669]' : 'text-[#9CA3AF]'
-                                }`}>
-                                  {result.trendData[0].trends[field.key]}
-                                </span>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            ))}
+          </div>
+        </div>
+        
+        {/* 趋势预警 */}
+        {result.trendWarnings && result.trendWarnings.length > 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">趋势预警 (+{result.trendWarnings.length * 3}分)</h4>
+            <div className="space-y-3">
+              {result.trendWarnings.map((warning, idx) => (
+                <div key={idx} className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <span className="text-amber-500 mt-0.5">⚠️</span>
+                  <div>
+                    <p className="text-sm font-medium text-amber-800">{warning.label || '趋势预警'}</p>
+                    <p className="text-xs text-amber-600 mt-1">{warning.detail || ''}</p>
+                  </div>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* 趋势数据 */}
+        {result.trendData && result.trendData.length > 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">
+              {result.dataCompleteness === 1 ? '趋势分析' : '趋势分析'}
+            </h4>
+            {result.dataCompleteness === 1 ? (
+              <p className="text-sm text-[#666666] text-center py-4">数据不足，无法进行趋势分析</p>
             ) : (
-              <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl p-6 text-center">
-                <p className="text-[#666666]">数据不足，无法进行趋势分析</p>
-              </div>
-            )}
-            
-            {/* 趋势预警 */}
-            {result.trendWarnings && result.trendWarnings.length > 0 && (
-              <div className="bg-[#FEF3C7] border border-[#FCD34D] rounded-xl p-6">
-                <h4 className="text-lg font-medium text-[#D97706] mb-3">趋势预警</h4>
-                <ul className="space-y-2">
-                  {result.trendWarnings.map((w, idx) => (
-                    <li key={idx} className="text-[#92400E] flex items-start gap-2">
-                      <span className="font-medium">[{w.label || '预警'} +{w.score ?? 0}分]</span>
-                      <span>{w.detail || ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {/* 交叉验证结果 */}
-            {result.crossValidation && result.crossValidation.length > 0 && (
-              <div className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-xl p-6">
-                <h4 className="text-lg font-medium text-[#DC2626] mb-3">交叉验证矛盾</h4>
-                <ul className="space-y-2">
-                  {result.crossValidation.filter(c => c.conflict).map((c, idx) => (
-                    <li key={idx} className="text-[#991B1B] flex items-start gap-2">
-                      <span>⚠️</span>
-                      <span><strong>{c.rule || ''}:</strong> {c.detail || ''}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {/* 预估风险金额 */}
-            {result.estimatedRiskAmount && result.estimatedRiskAmount.items && result.estimatedRiskAmount.items.length > 0 && (
-              <div className="bg-gradient-to-r from-[#FEE2E2] to-[#FEF3C7] border border-[#FCA5A5] rounded-xl p-6">
-                <h4 className="text-lg font-medium text-[#DC2626] mb-4">预估风险金额</h4>
-                <table className="w-full text-sm mb-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-[#FCA5A5]/50">
-                      <th className="text-left py-2 text-[#666666]">风险项</th>
-                      <th className="text-right py-2 text-[#666666]">预估补税</th>
-                      <th className="text-right py-2 text-[#666666]">罚款(0.5-5倍)</th>
+                    <tr className="border-b border-[#E5E7EB]">
+                      <th className="text-left py-2 text-[#666666] font-medium">期间</th>
+                      <th className="text-right py-2 text-[#666666] font-medium">毛利率</th>
+                      <th className="text-right py-2 text-[#666666] font-medium">净利率</th>
+                      <th className="text-right py-2 text-[#666666] font-medium">增值税率</th>
+                      <th className="text-right py-2 text-[#666666] font-medium">所得税率</th>
+                      <th className="text-right py-2 text-[#666666] font-medium">负债率</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {result.estimatedRiskAmount.items.map((item, idx) => (
-                      <tr key={idx} className="border-b border-[#FCA5A5]/30">
-                        <td className="py-2 text-[#991B1B]">{item.name || '未知'}</td>
-                        <td className="py-2 text-right text-[#92400E]">{item.taxMin ?? 0}-{item.taxMax ?? 0}万元</td>
-                        <td className="py-2 text-right text-[#92400E]">{item.penaltyMin ?? 0}-{item.penaltyMax ?? 0}万元</td>
+                    {result.trendData.map((row, idx) => (
+                      <tr key={idx} className="border-b border-[#F3F4F6]">
+                        <td className="py-2 text-[#333333]">{row.period}</td>
+                        <td className="py-2 text-right">
+                          {(row.grossMargin ?? 0).toFixed(1)}%
+                          {row.trends?.grossMargin && (
+                            <span className={`ml-1 ${row.trends.grossMargin === '↓' ? 'text-red-500' : 'text-green-500'}`}>
+                              {row.trends.grossMargin}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">
+                          {(row.netMargin ?? 0).toFixed(1)}%
+                          {row.trends?.netMargin && (
+                            <span className={`ml-1 ${row.trends.netMargin === '↓' ? 'text-red-500' : 'text-green-500'}`}>
+                              {row.trends.netMargin}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">
+                          {(row.vatRate ?? 0).toFixed(2)}%
+                          {row.trends?.vatRate && (
+                            <span className={`ml-1 ${row.trends.vatRate === '↓' ? 'text-red-500' : 'text-green-500'}`}>
+                              {row.trends.vatRate}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">
+                          {(row.citRate ?? 0).toFixed(2)}%
+                          {row.trends?.citRate && (
+                            <span className={`ml-1 ${row.trends.citRate === '↓' ? 'text-red-500' : 'text-green-500'}`}>
+                              {row.trends.citRate}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">
+                          {(row.debtRatio ?? 0).toFixed(1)}%
+                          {row.trends?.debtRatio && (
+                            <span className={`ml-1 ${row.trends.debtRatio === '↑' ? 'text-red-500' : 'text-green-500'}`}>
+                              {row.trends.debtRatio}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
-                    <tr className="font-bold">
-                      <td className="py-2 text-[#1A1A2E]">合计</td>
-                      <td className="py-2 text-right text-[#92400E]">{result.estimatedRiskAmount.totalTaxMin ?? 0}-{result.estimatedRiskAmount.totalTaxMax ?? 0}万元</td>
-                      <td className="py-2 text-right text-[#92400E]">{result.estimatedRiskAmount.totalPenaltyMin ?? 0}-{result.estimatedRiskAmount.totalPenaltyMax ?? 0}万元</td>
-                    </tr>
                   </tbody>
                 </table>
-                <div className="bg-white/50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-[#DC2626]">
-                    预估总风险金额：{result.estimatedRiskAmount.totalMin ?? 0}-{result.estimatedRiskAmount.totalMax ?? 0}万元
-                  </div>
-                  <div className="text-sm text-[#666666] mt-2">含补税+滞纳金（约18%）+罚款</div>
-                </div>
               </div>
             )}
-            
-            {/* CTA */}
-            <div className="bg-gradient-to-r from-[#EFF6FF] to-[#EDE9FE] border border-[#BFDBFE] rounded-xl p-6 text-center shadow-sm">
-              <div className="text-[#1A1A2E] font-bold text-lg mb-4">联系张老师，获取专业筹划方案 + 完整检测报告</div>
-              <div className="text-[#666666] mb-4">
-                <span className="text-xl mr-4">📞 138-1294-3969</span>
-                <span className="text-xl">✉️ zhanglaoshi@hgttax.com</span>
+          </div>
+        )}
+        
+        {/* 交叉验证 */}
+        {result.crossValidation && result.crossValidation.length > 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">数据交叉验证 (+{result.crossValidation.length * 3}分)</h4>
+            <div className="space-y-2">
+              {result.crossValidation.map((cv, idx) => (
+                <div key={idx} className={`flex items-start gap-2 text-sm p-2 rounded ${
+                  cv.conflict ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'
+                }`}>
+                  <span>{cv.conflict ? '❌' : '✓'}</span>
+                  <span>{cv.rule || cv.detail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* 风险明细 */}
+        {result.riskDetails && result.riskDetails.length > 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">风险明细</h4>
+            <ul className="space-y-2">
+              {result.riskDetails.map((detail, idx) => (
+                <li key={idx} className="flex items-start gap-2 text-sm text-[#333333]">
+                  <span className="text-red-500 mt-0.5">•</span>
+                  <span>{detail}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {/* 预估风险金额 */}
+        {result.estimatedRiskAmount && result.estimatedRiskAmount.items && result.estimatedRiskAmount.items.length > 0 && (
+          <div className="bg-white border border-[#E5E7EB] rounded-xl p-5">
+            <h4 className="text-sm font-semibold text-[#1A1A2E] mb-4">预估风险金额（万元）</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#E5E7EB]">
+                    <th className="text-left py-2 text-[#666666]">风险项</th>
+                    <th className="text-right py-2 text-[#666666]">补税区间</th>
+                    <th className="text-right py-2 text-[#666666]">罚款区间</th>
+                    <th className="text-right py-2 text-[#666666]">合计区间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.estimatedRiskAmount.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-[#F3F4F6]">
+                      <td className="py-2 text-[#333333]">{item.name}</td>
+                      <td className="py-2 text-right text-red-600">{item.taxMin} ~ {item.taxMax}</td>
+                      <td className="py-2 text-right text-red-600">{item.penaltyMin} ~ {item.penaltyMax}</td>
+                      <td className="py-2 text-right text-red-600 font-medium">
+                        {(item.taxMin + item.penaltyMin).toFixed(2)} ~ {(item.taxMax + item.penaltyMax).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="py-2 text-[#1A1A2E]">合计</td>
+                    <td className="py-2 text-right text-red-600">
+                      {result.estimatedRiskAmount.totalTaxMin?.toFixed(2)} ~ {result.estimatedRiskAmount.totalTaxMax?.toFixed(2)}
+                    </td>
+                    <td className="py-2 text-right text-red-600">
+                      {result.estimatedRiskAmount.totalPenaltyMin?.toFixed(2)} ~ {result.estimatedRiskAmount.totalPenaltyMax?.toFixed(2)}
+                    </td>
+                    <td className="py-2 text-right text-red-600">
+                      {result.estimatedRiskAmount.totalMin?.toFixed(2)} ~ {result.estimatedRiskAmount.totalMax?.toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        
+        {/* 操作按钮 */}
+        <div className="flex gap-3">
+          <button
+            onClick={() => { setResult(null); setCurrentStep(1); }}
+            className="flex-1 px-6 py-3 text-sm font-medium text-[#333333] bg-white border border-[#E5E7EB] rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            重新检测
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+              alert('报告已复制到剪贴板');
+            }}
+            className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-[#1D4ED8] transition-colors"
+          >
+            复制报告
+          </button>
+        </div>
+      </div>
+    );
+  };
+  
+  // 提交表单
+  const handleSubmit = async () => {
+    // 手机号校验
+    if (!formData.contactPhone || formData.contactPhone.length !== 11) {
+      setPhoneError('请输入11位手机号码');
+      setCurrentStep(1);
+      return;
+    }
+    
+    // 财务数据校验：最新一期必填
+    const latestPeriod = formData.financialData[0];
+    const requiredFields: Array<keyof FinancialPeriod> = ['revenue', 'cost', 'profit', 'vatPaid', 'incomeTaxPaid', 'totalAssets', 'totalLiabilities', 'receivables', 'inventory', 'advanceReceipts'];
+    const missingFields = requiredFields.filter(field => !latestPeriod[field] || latestPeriod[field] === 0);
+    
+    if (missingFields.length > 0) {
+      alert(`请填写最新一期财务数据：${missingFields.join('、')}`);
+      setCurrentStep(5);
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch('/api/risk-v4-submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '提交失败，请重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 设置答案
+  const setAnswer = (type: 'invoice' | 'revenueCost' | 'publicPrivate' | 'taxPolicy', id: string, score: number) => {
+    const keyMap = {
+      invoice: 'invoiceAnswers' as keyof FormData,
+      revenueCost: 'revenueCostAnswers' as keyof FormData,
+      publicPrivate: 'publicPrivateAnswers' as keyof FormData,
+      taxPolicy: 'taxPolicyAnswers' as keyof FormData
+    };
+    const key = keyMap[type];
+    setFormData(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] as Record<string, number>), [id]: score }
+    }));
+  };
+  
+  // 计算模块分数
+  const getModuleScore = (answers: Record<string, number>, questions: typeof INVOICE_QUESTIONS): number => {
+    return questions.reduce((sum, q) => sum + (answers[q.id] || 0), 0);
+  };
+  
+  // 渲染
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center">
+        <div className="text-[#666666]">加载中...</div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className={`min-h-screen ${compact ? 'bg-transparent' : 'bg-[#F7F8FA]'}`}>
+      {!compact && (
+        <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#2563EB] rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">张</span>
               </div>
-              <div className="text-sm text-[#9CA3AF]">
-                报告状态: {result.reportStatus || '待审核'} | 检测时间: {new Date().toLocaleString('zh-CN')}
+              <div>
+                <h1 className="text-lg font-bold text-[#1A1A2E]">财税风险检测</h1>
+                <p className="text-xs text-[#666666]">企业财税健康诊断</p>
+              </div>
+            </div>
+          </div>
+        </header>
+      )}
+      
+      <main className={`${compact ? 'p-0' : 'max-w-5xl mx-auto px-6 py-8'}`}>
+        {result ? (
+          renderResult()
+        ) : (
+          <>
+            {/* 步骤指示器 */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between">
+                {STEPS.map((step, idx) => (
+                  <React.Fragment key={step.id}>
+                    <div className="flex flex-col items-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                        currentStep >= step.id
+                          ? 'bg-[#2563EB] text-white'
+                          : 'bg-gray-200 text-[#666666]'
+                      }`}>
+                        {step.icon}
+                      </div>
+                      <span className={`text-xs mt-2 ${currentStep >= step.id ? 'text-[#2563EB]' : 'text-[#999999]'}`}>
+                        {step.name}
+                      </span>
+                    </div>
+                    {idx < STEPS.length - 1 && (
+                      <div className={`flex-1 h-1 mx-2 rounded ${
+                        currentStep > step.id ? 'bg-[#2563EB]' : 'bg-gray-200'
+                      }`} />
+                    )}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
             
-            {compact && onBack && (
-              <div className="text-center">
-                <button onClick={onBack} className="px-6 py-3 bg-[#F3F4F6] hover:bg-[#E5E7EB] text-[#1A1A2E] rounded-lg transition-colors">返回首页</button>
+            {/* 步骤内容 */}
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 mb-6">
+              <h2 className="text-lg font-semibold text-[#1A1A2E] mb-6">
+                {STEPS[currentStep - 1].name}
+              </h2>
+              
+              {currentStep === 1 && renderStep1()}
+              {currentStep === 2 && renderQuestionnaire(INVOICE_QUESTIONS, formData.invoiceAnswers, (id, score) => setAnswer('invoice', id, score), '发票')}
+              {currentStep === 3 && renderQuestionnaire(REVENUE_COST_QUESTIONS, formData.revenueCostAnswers, (id, score) => setAnswer('revenueCost', id, score), '收入成本')}
+              {currentStep === 4 && renderQuestionnaire(TAX_POLICY_QUESTIONS, formData.taxPolicyAnswers, (id, score) => setAnswer('taxPolicy', id, score), '税务')}
+              {currentStep === 5 && renderStep5()}
+            </div>
+            
+            {/* 错误提示 */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
               </div>
             )}
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-[#F7F8FA]">
-      {!compact && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-[#1A1A2E] mb-2">税智云·财税风险智能检测</h1>
-            <p className="text-[#666666]">6分钟完成，基于《智控征管》预警模型</p>
-          </div>
-        </div>
-      )}
-      
-      <div className={compact ? '' : 'max-w-4xl mx-auto px-4'}>
-        {/* 步骤指示器 */}
-        {currentStep < 6 && (
-          <div className="flex items-center justify-center gap-2 mb-8 overflow-x-auto pb-2">
-            {STEPS.map((step, idx) => (
-              <React.Fragment key={step.id}>
-                {idx > 0 && <div className={`w-8 h-0.5 ${currentStep > step.id ? 'bg-[#2563EB]' : 'bg-[#E5E7EB]'}`} />}
-                <button onClick={() => step.id < currentStep && setCurrentStep(step.id)} disabled={step.id > currentStep}
-                  className={`flex flex-col items-center min-w-[60px] ${step.id === currentStep ? 'text-[#2563EB]' : step.id < currentStep ? 'text-[#10B981] cursor-pointer' : 'text-[#9CA3AF]'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 ${step.id === currentStep ? 'border-[#2563EB] bg-[#EFF6FF]' : step.id < currentStep ? 'border-[#10B981] bg-[#D1FAE5]' : 'border-[#E5E7EB]'}`}>
-                    {step.id < currentStep ? '✓' : step.icon}
-                  </div>
-                  <span className="text-xs mt-1 whitespace-nowrap">{step.name}</span>
-                </button>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-        
-        {/* 内容区 */}
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-6 md:p-8 shadow-sm">
-          {error && (
-            <div className="mb-6 p-4 bg-[#FEE2E2] border border-[#FCA5A5] rounded-lg text-[#DC2626]">{error}</div>
-          )}
-          {renderStepContent()}
-        </div>
-        
-        {/* 导航按钮 */}
-        {currentStep < 6 && (
-          <div className="flex justify-between mt-6">
-            <button onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))} disabled={currentStep === 1}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${currentStep === 1 ? 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed' : 'bg-white border border-[#E5E7EB] text-[#1A1A2E] hover:bg-[#F9FAFB]'}`}>
-              上一步
-            </button>
             
-            {currentStep < 5 ? (
-              <button onClick={() => setCurrentStep(prev => prev + 1)} disabled={!canProceed()}
-                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-sm' : 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed'}`}>
-                下一步
-              </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={!canProceed() || isSubmitting}
-                className={`px-8 py-3 rounded-lg font-bold transition-colors ${canProceed() && !isSubmitting ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-sm' : 'bg-[#F3F4F6] text-[#9CA3AF] cursor-not-allowed'}`}>
-                {isSubmitting ? '提交检测中...' : '提交检测'}
-              </button>
-            )}
-          </div>
+            {/* 按钮 */}
+            <div className="flex gap-3">
+              {currentStep > 1 && (
+                <button
+                  onClick={() => setCurrentStep(s => s - 1)}
+                  className="px-6 py-3 text-sm font-medium text-[#333333] bg-white border border-[#E5E7EB] rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  上一步
+                </button>
+              )}
+              {currentStep < 5 && (
+                <button
+                  onClick={() => setCurrentStep(s => s + 1)}
+                  className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-[#1D4ED8] transition-colors"
+                >
+                  下一步
+                </button>
+              )}
+              {currentStep === 5 && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex-1 px-6 py-3 text-sm font-medium text-white bg-[#2563EB] rounded-lg hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
+                >
+                  {loading ? '提交中...' : '提交检测'}
+                </button>
+              )}
+            </div>
+          </>
         )}
-      </div>
-      
-      {!compact && (
-        <div className="text-center py-8 text-[#9CA3AF] text-sm">
-          由 <Link href="/" className="text-[#2563EB] hover:underline">税智云</Link> 提供技术支持
-        </div>
-      )}
+      </main>
     </div>
   );
 }
