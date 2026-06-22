@@ -14,7 +14,7 @@ interface ReportData {
     trendWarnings: { label: string; level: string; detail: string; consequence: string }[]
     crossValidation: { name: string; rule?: string; level: string; detail: string }[]
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
-    industryBenchmarks: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] | null
+    industryBenchmarks: { industry: string; items: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] } | null
   } | null
   createdAt: string
 }
