@@ -12,9 +12,9 @@ interface ReportData {
     mediumRiskItems: { name: string; source: string; module: string; impact: string }[]
     lowRiskItems: string[]
     trendWarnings: { label: string; level: string; detail: string; consequence: string }[]
-    estimatedRiskAmount: { items: { name: string; taxMin: number; taxMax: number; penaltyMin: number; penaltyMax: number }[]; totalMin: number; totalMax: number }
     crossValidation: { name: string; rule?: string; level: string; detail: string }[]
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
+    industryBenchmarks: { items: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] }
   } | null
   createdAt: string
 }
@@ -136,28 +136,31 @@ export default function ReportModule() {
             </Section>
           )}
 
-          {/* 预估风险金额 */}
-          {reportContent?.estimatedRiskAmount && (
-            <Section title="预估风险金额">
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                <thead><tr style={{ background: '#f9fafb' }}>
-                  <th style={{ textAlign: 'left', padding: 8, borderBottom: `2px solid ${C.border}` }}>风险项</th>
-                  <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>补税区间(万)</th>
-                  <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>罚款区间(万)</th>
-                </tr></thead>
+          {/* 行业基准对比 */}
+          {reportContent?.industryBenchmarks?.items && reportContent.industryBenchmarks.items.length > 0 && (
+            <Section title="行业基准对比">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb' }}>
+                    <th style={{ textAlign: 'center', padding: 8, borderBottom: `2px solid ${C.border}` }}>指标</th>
+                    <th style={{ textAlign: 'center', padding: 8, borderBottom: `2px solid ${C.border}` }}>行业基准范围</th>
+                    <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>企业实际值</th>
+                    <th style={{ textAlign: 'center', padding: 8, borderBottom: `2px solid ${C.border}` }}>状态</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {reportContent.estimatedRiskAmount.items?.map((item, i) => (
+                  {reportContent.industryBenchmarks.items.map((item, i) => (
                     <tr key={i}>
-                      <td style={{ padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.name}</td>
-                      <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.taxMin} ~ {item.taxMax}</td>
-                      <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.penaltyMin} ~ {item.penaltyMax}</td>
+                      <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.name}</td>
+                      <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.benchmarkMin}% ~ {item.benchmarkMax}%</td>
+                      <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.actual?.toFixed(2)}%</td>
+                      <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 500, background: item.status === 'below' ? '#fef3c7' : item.status === 'above' ? '#fef3c7' : '#dcfce7', color: item.status === 'below' ? '#d97706' : item.status === 'above' ? '#d97706' : '#16a34a' }}>
+                          {item.status === 'below' ? '偏低' : item.status === 'above' ? '偏高' : '正常'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
-                  <tr style={{ fontWeight: 600, background: '#fef3c7' }}>
-                    <td style={{ padding: 8 }}>合计</td>
-                    <td style={{ textAlign: 'right', padding: 8 }}>{reportContent.estimatedRiskAmount.totalMin} ~ {reportContent.estimatedRiskAmount.totalMax}</td>
-                    <td style={{ textAlign: 'right', padding: 8 }}>-</td>
-                  </tr>
                 </tbody>
               </table>
             </Section>

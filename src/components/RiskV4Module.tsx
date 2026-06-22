@@ -553,7 +553,7 @@ export default function RiskV4Module() {
               <div className="font-medium mb-2" style={{ color: '#1e40af' }}>💡 数据越完整，筛查越精准</div>
               <ul className="space-y-1" style={{ color: '#374151' }}>
                 <li>• 仅填最新一期：出基础筛查报告（无趋势分析）</li>
-                <li>• 填1-3年年度数据：出完整筛查报告（含趋势预警+风险金额预估）</li>
+                <li>• 填1-3年年度数据：出完整筛查报告（含趋势预警+行业基准对比）</li>
                 <li>• 开业3年以上的企业，建议填满3年数据，可获得最完整的风险趋势分析</li>
               </ul>
             </div>

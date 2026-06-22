@@ -509,83 +509,35 @@ function getDataCompleteness(data: FinancialPeriod[]): { count: number; msg: str
   return { count: filledCount, msg: '' };
 }
 
-// 预估风险金额计算（仅基于🔴🟡项）==============
-interface EstimatedRiskItem {
+// 行业基准对比计算==============
+interface IndustryBenchmarkItem {
   name: string;
-  level: string;
-  detail: string;
-  amountMin: number;
-  amountMax: number;
+  unit: string;
+  benchmarkMin: number;
+  benchmarkMax: number;
+  actual: number;
+  status: 'below' | 'normal' | 'above';
 }
 
-function calculateEstimatedRisk(
-  redItems: RiskItem[],
-  mediumItems: RiskItem[],
-  crossValidation: CrossValidationItem[],
-  trendWarnings: TrendWarningItem[],
-  revenue: number
-): EstimatedRiskItem[] {
-  const result: EstimatedRiskItem[] = [];
+function calculateIndustryBenchmarks(
+  industry: string,
+  metrics: ReturnType<typeof calculateMetrics>
+): IndustryBenchmarkItem[] {
+  const benchmark = INDUSTRY_BENCHMARKS[industry] || INDUSTRY_BENCHMARKS['其他'];
   
-  // 基于高风险项估算
-  if (redItems.length > 0) {
-    // 按模块分组估算
-    const moduleGroups = new Map<string, RiskItem[]>();
-    redItems.forEach(item => {
-      const existing = moduleGroups.get(item.module) || [];
-      existing.push(item);
-      moduleGroups.set(item.module, existing);
-    });
-    
-    moduleGroups.forEach((items, module) => {
-      const base = revenue * 0.01;
-      result.push({
-        name: `${module}高风险项`,
-        level: '🔴高风险',
-        detail: `${items.length}项高风险因素`,
-        amountMin: Math.round(base * items.length * 50),  // 万元
-        amountMax: Math.round(base * items.length * 500)
-      });
-    });
-  }
+  const getStatus = (actual: number, min: number, max: number): 'below' | 'normal' | 'above' => {
+    if (actual < min) return 'below';
+    if (actual > max) return 'above';
+    return 'normal';
+  };
   
-  // 基于中等风险项估算
-  if (mediumItems.length > 0) {
-    const base = revenue * 0.005;
-    result.push({
-      name: '中等风险因素',
-      level: '🟡中风险',
-      detail: `${mediumItems.length}项中等风险因素`,
-      amountMin: Math.round(base * mediumItems.length * 10),
-      amountMax: Math.round(base * mediumItems.length * 100)
-    });
-  }
-  
-  // 基于交叉验证风险
-  const redCross = crossValidation.filter(c => c.level === 'high');
-  if (redCross.length > 0 && revenue > 0) {
-    result.push({
-      name: '财务指标异常',
-      level: '🔴高风险',
-      detail: `${redCross.length}项财务指标严重偏离行业均值`,
-      amountMin: Math.round(revenue * 0.05),
-      amountMax: Math.round(revenue * 0.3)
-    });
-  }
-  
-  // 基于趋势预警风险
-  const redTrend = trendWarnings.filter(t => t.level === 'high');
-  if (redTrend.length > 0 && revenue > 0) {
-    result.push({
-      name: '风险趋势恶化',
-      level: '🔴高风险',
-      detail: `${redTrend.length}项关键指标趋势恶化`,
-      amountMin: Math.round(revenue * 0.02),
-      amountMax: Math.round(revenue * 0.15)
-    });
-  }
-  
-  return result;
+  return [
+    { name: '毛利率', unit: '%', benchmarkMin: benchmark.grossMargin.min, benchmarkMax: benchmark.grossMargin.max, actual: metrics.grossMargin, status: getStatus(metrics.grossMargin, benchmark.grossMargin.min, benchmark.grossMargin.max) },
+    { name: '企业所得税税负率', unit: '%', benchmarkMin: benchmark.citRate.min, benchmarkMax: benchmark.citRate.max, actual: metrics.citRate, status: getStatus(metrics.citRate, benchmark.citRate.min, benchmark.citRate.max) },
+    { name: '增值税税负率', unit: '%', benchmarkMin: benchmark.vatRate.min, benchmarkMax: benchmark.vatRate.max, actual: metrics.vatRate, status: getStatus(metrics.vatRate, benchmark.vatRate.min, benchmark.vatRate.max) },
+    { name: '净利率', unit: '%', benchmarkMin: benchmark.netMargin.min, benchmarkMax: benchmark.netMargin.max, actual: metrics.netMargin, status: getStatus(metrics.netMargin, benchmark.netMargin.min, benchmark.netMargin.max) },
+    { name: '资产负债率', unit: '%', benchmarkMin: 30, benchmarkMax: 70, actual: metrics.debtRatio, status: getStatus(metrics.debtRatio, 30, 70) }
+  ];
 }
 
 // 报告内容生成（新版JSON结构）==============
@@ -603,12 +555,12 @@ function generateReportContent(params: {
   lowRiskItems: string[];
   trend: Array<{ period: string; metrics: ReturnType<typeof calculateMetrics> }>;
   trendWarnings: TrendWarningItem[];
-  estimatedRisk: EstimatedRiskItem[];
+  estimatedRisk:
   crossValidation: CrossValidationItem[];
   dataCompleteness: { count: number; msg: string };
 }): string {
-  const totalAmountMin = params.estimatedRisk.reduce((s, r) => s + r.amountMin, 0);
-  const totalAmountMax = params.estimatedRisk.reduce((s, r2) => s + r2.amountMax, 0);
+  const totalAmountMin = 0;
+  const totalAmountMax = 0;
   
   return JSON.stringify({
     overview: {
@@ -646,11 +598,7 @@ function generateReportContent(params: {
       detail: w.detail,
       consequence: w.consequence
     })),
-    estimatedRiskAmount: {
-      items: params.estimatedRisk,
-      totalMin: totalAmountMin,
-      totalMax: totalAmountMax
-    },
+    industryBenchmarks: params.industryBenchmarks,
     crossValidation: params.crossValidation.map(c => ({
       rule: c.rule,
       level: c.levelIcon,
@@ -814,14 +762,8 @@ export async function POST(request: NextRequest) {
       metrics: calculateMetrics(d)
     })).reverse(); // 按时间正序排列
     
-    // 7. 预估风险金额
-    const estimatedRisk = calculateEstimatedRisk(
-      highRiskItems,
-      mediumRiskItems,
-      crossValidation,
-      trendWarnings,
-      latestData?.revenue || 0
-    );
+    // 7. 行业基准对比
+    const industryBenchmarks = latestMetrics ? calculateIndustryBenchmarks(industry, latestMetrics) : [];
     
     // 8. 数据完整度
     const dataCompleteness = getDataCompleteness(financialData);
@@ -915,7 +857,7 @@ export async function POST(request: NextRequest) {
       lowRiskItems: lowRiskItems.map(i => i.name),
       trend: trendData,
       trendWarnings,
-      estimatedRisk,
+      industryBenchmarks,
       crossValidation,
       dataCompleteness
     });
@@ -957,10 +899,8 @@ export async function POST(request: NextRequest) {
       lowRiskItems: lowRiskItems.map(i => i.name),
       crossValidation,
       trendWarnings,
-      estimatedRiskAmount: {
-        items: estimatedRisk,
-        totalMin: estimatedRisk.reduce((s, r) => s + r.amountMin, 0),
-        totalMax: estimatedRisk.reduce((s, r) => s + r.amountMax, 0)
+      industryBenchmarks: {
+        items: industryBenchmarks,
       },
       trendData,
       dataCompleteness,
