@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import dynamic from 'next/dynamic';
 
 const RiskV4Module = dynamic(
@@ -22,5 +23,9 @@ const RiskV4Module = dynamic(
 );
 
 export default function RiskPage() {
+  useEffect(() => {
+    document.title = '企业财税合规风险筛查';
+  }, []);
+
   return <RiskV4Module />;
 }

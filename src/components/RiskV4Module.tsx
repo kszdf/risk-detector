@@ -345,7 +345,7 @@ export default function RiskV4Module() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-bold" style={{ color: '#1f2937' }}>企业风险检测 V4</h1>
+            <h1 className="text-xl font-bold" style={{ color: '#1f2937' }}>企业财税合规风险筛查</h1>
             <span className="text-sm" style={{ color: '#6b7280' }}>第 {currentStep + 1} / {STEPS.length} 步</span>
           </div>
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
