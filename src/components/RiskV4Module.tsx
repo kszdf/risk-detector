@@ -556,8 +556,13 @@ export default function RiskV4Module() {
             <div className="border-b-2 pb-2" style={{ borderColor: '#C2410C' }}>
               <h2 className="text-xl font-bold" style={{ color: '#C2410C' }}>财务数据</h2>
             </div>
-            <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' }}>
-              💡 经营年度数据越完整，对比度越高，风险诊断越精准。建议至少填报2期数据。
+            <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+              <div className="font-medium mb-2" style={{ color: '#1e40af' }}>💡 数据越完整，筛查越精准</div>
+              <ul className="space-y-1" style={{ color: '#374151' }}>
+                <li>• 仅填最新一期：出基础筛查报告（无趋势分析）</li>
+                <li>• 填1-3年年度数据：出完整筛查报告（含趋势预警+风险金额预估）</li>
+                <li>• 开业3年以上的企业，建议填满3年数据，可获得最完整的风险趋势分析</li>
+              </ul>
             </div>
             {/* 最新一期月份选择 */}
             <div className="bg-white rounded-lg p-4 border-2" style={{ borderColor: '#C2410C' }}>
