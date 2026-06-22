@@ -698,6 +698,7 @@ export async function POST(request: NextRequest) {
     const industry = body.industry || '';
     const revenueScale = body.revenueScale || '';
     const enterpriseName = body.enterpriseName || '';
+    const creditCode = body.creditCode || '';
     const contactPerson = body.contactPerson || '';
     const contactPhone = body.contactPhone || '';
     const customerEmail = body.customerEmail || '';
@@ -728,6 +729,7 @@ export async function POST(request: NextRequest) {
     
     // 基本信息
     fields['企业名称'] = enterpriseName;
+    fields['统一信用代码'] = creditCode;
     fields['联系人'] = contactPerson;
     fields['联系电话'] = contactPhone;
     fields['客户邮箱'] = customerEmail;

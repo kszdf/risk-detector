@@ -1,6 +1,6 @@
 'use client'
-import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Loader2, CheckCircle, AlertCircle, ArrowRight, ArrowDown, TrendingUp, TrendingDown, Info } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { Loader2, CheckCircle, ArrowRight } from 'lucide-react'
 
 // ============ 类型定义 ============
 interface FinancialPeriod {
@@ -20,6 +20,7 @@ interface FinancialPeriod {
 
 interface FormData {
   enterpriseName: string
+  creditCode: string
   contactPerson: string
   contactPhone: string
   customerEmail: string
@@ -33,52 +34,6 @@ interface FormData {
   latestMonth: string
 }
 
-interface RiskItem {
-  module: string
-  category: string
-  item: string
-  score: number
-  weight: number
-  maxScore: number
-  actualValue: string
-  threshold: string
-  description: string
-}
-
-interface CrossValidation {
-  type: string
-  ratio: string
-  benchmark: string
-  status: '正常' | '异常'
-  score: number
-}
-
-interface TrendWarning {
-  type: string
-  current: string
-  previous: string
-  change: string
-  score: number
-}
-
-interface ResultData {
-  enterpriseName: string
-  detectionTime: string
-  period: string
-  riskScore: number
-  maxScore: number
-  riskLevel: '低风险' | '中风险' | '高风险' | '极高风险'
-  weightedScores: Record<string, number>
-  riskItems: RiskItem[]
-  crossValidations: CrossValidation[]
-  trendWarnings: TrendWarning[]
-  estimatedRiskAmount: number
-  riskLevelDescription: string
-  improvementSuggestions: string[]
-  dataCompleteness: string
-  reportContent: string
-}
-
 // ============ 安全工具函数 ============
 const safeGetYearOptions = (): number[] => {
   try {
@@ -87,19 +42,54 @@ const safeGetYearOptions = (): number[] => {
   } catch { return [2025, 2024, 2023] }
 }
 
-const safeGetDefaultLatestMonth = (): string => {
-  try {
-    const now = new Date()
-    const month = now.getMonth() + 1
-    const defaultMonth = month >= 3 ? month - 2 : 12 + month - 2
-    return `${now.getFullYear()}-${String(defaultMonth).padStart(2, '0')}`
-  } catch { return '2026-04' }
-}
-
 const safeCreateEmptyPeriod = (period: string, type: 'latest' | 'annual'): FinancialPeriod => ({
   period, type, revenue: '', cost: '', profit: '', vatPaid: '', incomeTaxPaid: '',
   totalAssets: '', totalLiabilities: '', receivables: '', inventory: '', advanceReceipts: ''
 })
+
+const safeCreateInitialFormData = (): FormData => {
+  try {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = now.getMonth() + 1
+    const defaultMonth = m >= 3 ? m - 2 : 12 + m - 2
+    const latestPeriod = `${y}-${String(defaultMonth).padStart(2, '0')}`
+    const years = [y - 1, y - 2, y - 3]
+    return {
+      enterpriseName: '',
+      creditCode: '',
+      contactPerson: '',
+      contactPhone: '',
+      customerEmail: '',
+      industry: '',
+      revenueScale: '',
+      invoiceAnswers: {},
+      revenueAnswers: {},
+      publicPrivateAnswers: {},
+      taxAnswers: {},
+      financialData: [
+        { ...safeCreateEmptyPeriod(latestPeriod, 'latest') },
+        { ...safeCreateEmptyPeriod(`${years[0]}-12`, 'annual') },
+        { ...safeCreateEmptyPeriod(`${years[1]}-12`, 'annual') },
+        { ...safeCreateEmptyPeriod(`${years[2]}-12`, 'annual') },
+      ],
+      latestMonth: latestPeriod,
+    }
+  } catch {
+    return {
+      enterpriseName: '', creditCode: '', contactPerson: '', contactPhone: '',
+      customerEmail: '', industry: '', revenueScale: '',
+      invoiceAnswers: {}, revenueAnswers: {}, publicPrivateAnswers: {}, taxAnswers: {},
+      financialData: [
+        { ...safeCreateEmptyPeriod('2026-04', 'latest') },
+        { ...safeCreateEmptyPeriod('2025-12', 'annual') },
+        { ...safeCreateEmptyPeriod('2024-12', 'annual') },
+        { ...safeCreateEmptyPeriod('2023-12', 'annual') },
+      ],
+      latestMonth: '2026-04',
+    }
+  }
+}
 
 // ============ 步骤定义（6步） ============
 const STEPS = [
@@ -114,7 +104,7 @@ const STEPS = [
 // ============ 问卷题目 ============
 const INVOICE_QUESTIONS = [
   { id: 'inv1', question: '1. 进货发票的索取情况', options: [{ text: '全部依法开具', score: 10 }, { text: '大部分有发票', score: 7 }, { text: '只有进项发票', score: 4 }, { text: '无正规发票', score: 0 }] },
-  { text: '2. 进货渠道的发票合规性', options: [{ text: '从一般纳税人采购', score: 10 }, { text: '从有资质供应商采购', score: 7 }, { text: '有部分无票渠道', score: 4 }, { text: '大量无票采购', score: 0 }] },
+  { id: 'inv2', question: '2. 进货渠道的发票合规性', options: [{ text: '从一般纳税人采购', score: 10 }, { text: '从有资质供应商采购', score: 7 }, { text: '有部分无票渠道', score: 4 }, { text: '大量无票采购', score: 0 }] },
   { id: 'inv3', question: '3. 发票入账的及时性', options: [{ text: '当月发票当月入账', score: 10 }, { text: '偶尔跨期', score: 7 }, { text: '经常跨期', score: 4 }, { text: '长期滞留未入账', score: 0 }] },
   { id: 'inv4', question: '4. 销项发票的开具情况', options: [{ text: '全部依法开具', score: 10 }, { text: '大部分依法开具', score: 7 }, { text: '存在滞后开具', score: 4 }, { text: '账外经营', score: 0 }] },
   { id: 'inv5', question: '5. 资金回流的异常情况', options: [{ text: '无资金回流', score: 10 }, { text: '有少量往来款', score: 7 }, { text: '有资金回流但可解释', score: 4 }, { text: '存在明显资金回流', score: 0 }] },
@@ -164,9 +154,9 @@ const QuestionnaireSection = ({ questions, answers, onChange, color }: {
                 className={`px-4 py-2 rounded-lg border-2 text-left text-sm transition-all ${
                   isSelected
                     ? 'border-current text-white'
-                    : 'border-gray-200 text-gray-700 hover:border-gray-300 bg-white'
+                    : 'border-gray-200 text-gray-700 hover:border-gray-300'
                 }`}
-                style={isSelected ? { backgroundColor: color, borderColor: color } : {}}
+                style={isSelected ? { backgroundColor: color, borderColor: color } : { backgroundColor: '#ffffff' }}
               >
                 {opt.text}
               </button>
@@ -216,10 +206,11 @@ const FinancialPeriodInput = ({ period, data, onChange, color, isRequired, label
                 value={data[f.key as keyof FinancialPeriod] as string}
                 onChange={e => onChange(f.key, e.target.value)}
                 placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <div className="group absolute right-2 top-1/2 -translate-y-1/2">
-                <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                <span className="text-gray-400 cursor-help text-xs">?</span>
                 <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg whitespace-nowrap z-10">
                   {f.tip}
                 </div>
@@ -232,231 +223,63 @@ const FinancialPeriodInput = ({ period, data, onChange, color, isRequired, label
   )
 }
 
-const ResultReport = ({ result }: { result: ResultData }) => {
-  const getPercentScore = () => {
-    if (!result.maxScore) return 0
-    return Math.round((result.riskScore / result.maxScore) * 1000) / 10
-  }
-  const getRiskColor = () => {
-    switch (result.riskLevel) {
-      case '低风险': return 'text-green-600 bg-green-50'
-      case '中风险': return 'text-amber-600 bg-amber-50'
-      case '高风险': return 'text-orange-600 bg-orange-50'
-      default: return 'text-red-600 bg-red-50'
-    }
-  }
-  const moduleScores = Object.entries(result.weightedScores || {}).map(([k, v]) => ({ name: k, score: v }))
-
-  return (
-    <div className="space-y-6">
-      {/* 报告头部 */}
-      <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">{result.enterpriseName}</h2>
-            <p className="text-gray-500 text-sm mt-1">检测时间: {result.detectionTime}</p>
-          </div>
-          <div className={`px-4 py-2 rounded-lg font-bold ${getRiskColor()}`}>
-            {result.riskLevel}
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600">{result.riskScore}</div>
-            <div className="text-sm text-gray-600">风险得分</div>
-          </div>
-          <div className="bg-purple-50 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-purple-600">{result.maxScore}</div>
-            <div className="text-sm text-gray-600">满分</div>
-          </div>
-          <div className="bg-orange-50 rounded-lg p-4 text-center">
-            <div className="text-3xl font-bold text-orange-600">{getPercentScore()}分</div>
-            <div className="text-sm text-gray-600">百分制</div>
-          </div>
-        </div>
-      </div>
-
-      {/* 数据完整度提示 */}
-      {result.dataCompleteness && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
-          {result.dataCompleteness}
-        </div>
-      )}
-
-      {/* 预估风险金额 */}
-      {result.estimatedRiskAmount > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-red-600 font-bold">预估风险金额</div>
-          <div className="text-2xl font-bold text-red-700 mt-1">
-            ¥{result.estimatedRiskAmount.toLocaleString()}万元
-          </div>
-        </div>
-      )}
-
-      {/* 模块得分 */}
-      <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <h3 className="font-bold text-gray-800 mb-4">风险分布</h3>
-        <div className="space-y-3">
-          {moduleScores.map(m => {
-            const percent = result.maxScore ? (m.score / result.maxScore) * 100 : 0
-            return (
-              <div key={m.name}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-700">{m.name}</span>
-                  <span className="text-gray-500">{m.score}分</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" style={{ width: `${percent}%` }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* 风险项明细 */}
-      {result.riskItems && result.riskItems.length > 0 && (
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-4">风险项明细</h3>
-          <div className="space-y-3">
-            {result.riskItems.slice(0, 10).map((item, idx) => (
-              <div key={idx} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-800">{item.item}</div>
-                  <div className="text-sm text-gray-600 mt-1">{item.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 趋势分析 */}
-      {result.trendWarnings && result.trendWarnings.length > 0 && (
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-4">趋势预警</h3>
-          <div className="space-y-3">
-            {result.trendWarnings.map((tw, idx) => (
-              <div key={idx} className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-orange-500" />
-                <div className="flex-1">
-                  <div className="font-medium text-gray-800">{tw.type}</div>
-                  <div className="text-sm text-gray-600">
-                    当前: {tw.current} | 上期: {tw.previous}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 改进建议 */}
-      {result.improvementSuggestions && result.improvementSuggestions.length > 0 && (
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <h3 className="font-bold text-gray-800 mb-4">改进建议</h3>
-          <ul className="space-y-2">
-            {result.improvementSuggestions.map((s, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-gray-700">
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                {s}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ============ 主组件 ============
 export default function RiskV4Module() {
-  const [currentStep, setCurrentStep] = useState(0)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [result, setResult] = useState<ResultData | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [formData, setFormData] = useState<FormData>(safeCreateInitialFormData)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [submitSuccess, setSubmitSuccess] = useState(false)
   const [phoneError, setPhoneError] = useState('')
-
-  const yearOptions = useMemo(() => safeGetYearOptions(), [])
-  const defaultLatestMonth = useMemo(() => safeGetDefaultLatestMonth(), [])
-
-  const [formData, setFormData] = useState<FormData>(() => {
-    const latest = safeCreateEmptyPeriod(defaultLatestMonth, 'latest')
-    return {
-      enterpriseName: '', contactPerson: '', contactPhone: '', customerEmail: '',
-      industry: '', revenueScale: '',
-      invoiceAnswers: {}, revenueAnswers: {}, publicPrivateAnswers: {}, taxAnswers: {},
-      financialData: [
-        latest,
-        safeCreateEmptyPeriod(`${yearOptions[0]}-12`, 'annual'),
-        safeCreateEmptyPeriod(`${yearOptions[1]}-12`, 'annual'),
-        safeCreateEmptyPeriod(`${yearOptions[2]}-12`, 'annual'),
-      ],
-      latestMonth: defaultLatestMonth,
-    }
-  })
+  const [creditCodeError, setCreditCodeError] = useState('')
+  const yearOptions = safeGetYearOptions()
 
   useEffect(() => { setIsHydrated(true) }, [])
 
-  const handleFinancialChange = useCallback((periodIndex: number, field: string, value: string) => {
+  const handleFinancialPeriodChange = useCallback((index: number, field: keyof FinancialPeriod, value: string) => {
     setFormData(prev => {
       const newData = [...prev.financialData]
-      newData[periodIndex] = { ...newData[periodIndex], [field]: value }
-      return { ...prev, financialData: newData }
-    })
-  }, [])
-
-  const handleFinancialPeriodChange = useCallback((periodIndex: number, field: keyof FinancialPeriod, value: string) => {
-    setFormData(prev => {
-      const newData = [...prev.financialData]
-      newData[periodIndex] = { ...newData[periodIndex], [field]: value }
+      newData[index] = { ...newData[index], [field]: value }
       return { ...prev, financialData: newData }
     })
   }, [])
 
   const validateStep = (step: number): string | null => {
     if (step === 0) {
-      if (!formData.enterpriseName.trim()) return '请输入企业名称'
-      if (!formData.contactPerson.trim()) return '请输入联系人'
-      const phone = formData.contactPhone.replace(/\D/g, '')
-      if (phone.length > 0 && phone.length !== 11) return '请输入11位手机号码'
+      if (!formData.contactPerson.trim()) return '请填写联系人'
+      if (!formData.contactPhone.trim()) return '请填写联系电话'
+      if (formData.contactPhone.length !== 11) return '联系电话必须是11位手机号码'
       if (!formData.industry) return '请选择所属行业'
       if (!formData.revenueScale) return '请选择营收规模'
     }
     if (step === 1) {
       const answered = Object.keys(formData.invoiceAnswers).length
-      if (answered < 5) return '请完成所有发票与资金流问题'
+      if (answered < 5) return '请回答所有发票与资金流问题'
     }
     if (step === 2) {
       const answered = Object.keys(formData.revenueAnswers).length
-      if (answered < 4) return '请完成所有收入与成本问题'
+      if (answered < 4) return '请回答所有收入与成本问题'
     }
     if (step === 3) {
       const answered = Object.keys(formData.publicPrivateAnswers).length
-      if (answered < 5) return '请完成所有公私账户问题'
+      if (answered < 5) return '请回答所有公私账户问题'
     }
     if (step === 4) {
       const answered = Object.keys(formData.taxAnswers).length
-      if (answered < 5) return '请完成所有税务申报问题'
-    }
-    if (step === 5) {
-      const latest = formData.financialData[0]
-      const required = ['revenue', 'cost', 'profit', 'vatPaid', 'incomeTaxPaid', 'totalAssets', 'totalLiabilities', 'receivables', 'inventory', 'advanceReceipts']
-      for (const r of required) {
-        if (!latest[r as keyof FinancialPeriod]) return '请填写最新一期全部必填字段'
-      }
+      if (answered < 5) return '请回答所有税务申报问题'
     }
     return null
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
     setIsSubmitting(true)
     setError(null)
     try {
       const payload = {
         enterpriseName: formData.enterpriseName,
+        creditCode: formData.creditCode,
         contactPerson: formData.contactPerson,
         contactPhone: formData.contactPhone,
         customerEmail: formData.customerEmail,
@@ -476,7 +299,7 @@ export default function RiskV4Module() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '提交失败')
-      setResult(data.result)
+      setSubmitSuccess(true)
     } catch (err: any) {
       setError(err.message || '检测失败')
     } finally {
@@ -490,17 +313,27 @@ export default function RiskV4Module() {
   }
 
   if (!isHydrated) {
-    return <div className="min-h-screen bg-white flex items-center justify-center text-gray-500">加载中...</div>
+    return <div className="min-h-screen bg-white flex items-center justify-center" style={{ color: '#666666' }}>加载中...</div>
   }
 
-  if (result) {
+  // 提交成功确认页面
+  if (submitSuccess) {
     return (
-      <div className="min-h-screen bg-gray-100">
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">风险检测报告</h1>
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle className="w-12 h-12 text-green-600" />
           </div>
-          <ResultReport result={result} />
+          <h2 className="text-2xl font-bold mb-4" style={{ color: '#1f2937' }}>提交成功</h2>
+          <p className="text-lg mb-8" style={{ color: '#4b5563' }}>
+            检测内容已提交，检测报告经人工审核后<span className="font-bold">2小时内</span>会有客服人员联系并发送报告
+          </p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="px-8 py-3 rounded-lg text-white font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
+          >
+            返回首页
+          </button>
         </div>
       </div>
     )
@@ -512,15 +345,15 @@ export default function RiskV4Module() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-bold text-gray-900">企业风险检测 V4</h1>
-            <span className="text-sm text-gray-500">第 {currentStep + 1} / {STEPS.length} 步</span>
+            <h1 className="text-xl font-bold" style={{ color: '#1f2937' }}>企业风险检测 V4</h1>
+            <span className="text-sm" style={{ color: '#6b7280' }}>第 {currentStep + 1} / {STEPS.length} 步</span>
           </div>
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div className="h-full rounded-full transition-all duration-500" style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%`, background: getProgressGradient() }} />
           </div>
-          <div className="flex justify-between mt-2 text-xs text-gray-500">
+          <div className="flex justify-between mt-2 text-xs" style={{ color: '#9ca3af' }}>
             {STEPS.map((s, i) => (
-              <span key={s.id} className={i <= currentStep ? 'text-blue-600 font-medium' : ''}>{s.label}</span>
+              <span key={s.id} className={i <= currentStep ? 'font-medium' : ''} style={{ color: i <= currentStep ? '#2563eb' : '#9ca3af' }}>{s.label}</span>
             ))}
           </div>
         </div>
@@ -536,33 +369,83 @@ export default function RiskV4Module() {
             </div>
             <div className="bg-white rounded-xl p-6 border border-gray-200 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">企业名称 <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.enterpriseName} onChange={e => setFormData(p => ({ ...p, enterpriseName: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="请输入企业全称" />
+                <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>企业名称</label>
+                <input
+                  type="text"
+                  value={formData.enterpriseName}
+                  onChange={e => setFormData(p => ({ ...p, enterpriseName: e.target.value }))}
+                  style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="请输入企业全称"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>统一信用代码</label>
+                <input
+                  type="text"
+                  value={formData.creditCode}
+                  onChange={e => {
+                    const v = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 18)
+                    setFormData(p => ({ ...p, creditCode: v }))
+                    if (v.length > 0 && v.length < 18) setCreditCodeError('统一信用代码应为18位大写字母或数字')
+                    else setCreditCodeError('')
+                  }}
+                  style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                  className={`w-full px-4 py-2 border rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${creditCodeError ? 'border-red-500' : 'border-gray-300'}`}
+                  placeholder="18位统一社会信用代码"
+                />
+                {creditCodeError && <p className="text-red-500 text-xs mt-1">{creditCodeError}</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">联系人 <span className="text-red-500">*</span></label>
-                  <input type="text" value={formData.contactPerson} onChange={e => setFormData(p => ({ ...p, contactPerson: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="请输入联系人姓名" />
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>联系人 <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={formData.contactPerson}
+                    onChange={e => setFormData(p => ({ ...p, contactPerson: e.target.value }))}
+                    style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="请输入联系人姓名"
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">联系电话 <span className="text-red-500">*</span></label>
-                  <input type="tel" value={formData.contactPhone} onChange={e => {
-                    const v = e.target.value.replace(/\D/g, '').slice(0, 11)
-                    setFormData(p => ({ ...p, contactPhone: v }))
-                    if (v.length > 0 && v.length < 11) setPhoneError('请输入11位手机号码')
-                    else setPhoneError('')
-                  }} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 ${phoneError ? 'border-red-500 ring-red-200' : 'border-gray-300 focus:ring-blue-500'}`} placeholder="用于接收检测报告" />
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>联系电话 <span className="text-red-500">*</span></label>
+                  <input
+                    type="tel"
+                    value={formData.contactPhone}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 11)
+                      setFormData(p => ({ ...p, contactPhone: v }))
+                      if (v.length > 0 && v.length < 11) setPhoneError('请输入11位手机号码')
+                      else setPhoneError('')
+                    }}
+                    style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                    className={`w-full px-4 py-2 border rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${phoneError ? 'border-red-500' : 'border-gray-300'}`}
+                    placeholder="用于接收检测报告"
+                  />
                   {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">邮箱（选填）</label>
-                <input type="email" value={formData.customerEmail} onChange={e => setFormData(p => ({ ...p, customerEmail: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="用于接收电子报告" />
+                <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>邮箱</label>
+                <input
+                  type="email"
+                  value={formData.customerEmail}
+                  onChange={e => setFormData(p => ({ ...p, customerEmail: e.target.value }))}
+                  style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="用于接收电子报告"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">所属行业 <span className="text-red-500">*</span></label>
-                  <select value={formData.industry} onChange={e => setFormData(p => ({ ...p, industry: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>所属行业 <span className="text-red-500">*</span></label>
+                  <select
+                    value={formData.industry}
+                    onChange={e => setFormData(p => ({ ...p, industry: e.target.value }))}
+                    style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
                     <option value="">请选择行业</option>
                     <option value="制造业">制造业</option>
                     <option value="批发零售">批发零售</option>
@@ -576,8 +459,13 @@ export default function RiskV4Module() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">营收规模 <span className="text-red-500">*</span></label>
-                  <select value={formData.revenueScale} onChange={e => setFormData(p => ({ ...p, revenueScale: e.target.value }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>营收规模 <span className="text-red-500">*</span></label>
+                  <select
+                    value={formData.revenueScale}
+                    onChange={e => setFormData(p => ({ ...p, revenueScale: e.target.value }))}
+                    style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
                     <option value="">请选择规模</option>
                     <option value="小规模（500万以下）">小规模（500万以下）</option>
                     <option value="中小（500万-2000万）">中小（500万-2000万）</option>
@@ -636,21 +524,26 @@ export default function RiskV4Module() {
             <div className="border-b-2 pb-2" style={{ borderColor: '#C2410C' }}>
               <h2 className="text-xl font-bold" style={{ color: '#C2410C' }}>财务数据</h2>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm">
+            <div className="rounded-lg p-4 text-sm" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' }}>
               💡 经营年度数据越完整，对比度越高，风险诊断越精准。建议至少填报2期数据。
             </div>
             {/* 最新一期月份选择 */}
             <div className="bg-white rounded-lg p-4 border-2" style={{ borderColor: '#C2410C' }}>
               <div className="flex items-center gap-4">
-                <label className="font-medium text-gray-700">数据所属月份</label>
-                <select value={formData.latestMonth} onChange={e => {
-                  const newMonth = e.target.value
-                  setFormData(p => {
-                    const newData = [...p.financialData]
-                    newData[0] = { ...newData[0], period: newMonth }
-                    return { ...p, latestMonth: newMonth, financialData: newData }
-                  })
-                }} className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                <label className="font-medium" style={{ color: '#374151' }}>数据所属月份</label>
+                <select
+                  value={formData.latestMonth}
+                  onChange={e => {
+                    const newMonth = e.target.value
+                    setFormData(p => {
+                      const newData = [...p.financialData]
+                      newData[0] = { ...newData[0], period: newMonth }
+                      return { ...p, latestMonth: newMonth, financialData: newData }
+                    })
+                  }}
+                  style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
                   <option value="2026-04">2026-04</option>
                   <option value="2026-05">2026-05</option>
                 </select>
@@ -666,13 +559,19 @@ export default function RiskV4Module() {
 
         {/* 错误提示 */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">{error}</div>
+          <div className="rounded-lg p-4" style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626' }}>{error}</div>
         )}
 
         {/* 导航按钮 */}
         <div className="flex justify-between mt-8">
           {currentStep > 0 ? (
-            <button onClick={() => setCurrentStep(s => s - 1)} className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">上一步</button>
+            <button
+              onClick={() => setCurrentStep(s => s - 1)}
+              style={{ backgroundColor: '#ffffff', color: '#374151', border: '1px solid #d1d5db' }}
+              className="px-6 py-3 rounded-lg hover:bg-gray-50"
+            >
+              上一步
+            </button>
           ) : <div />}
           {currentStep < STEPS.length - 1 ? (
             <button
@@ -683,8 +582,13 @@ export default function RiskV4Module() {
               下一步 <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={isSubmitting} className="px-8 py-3 rounded-lg text-white font-medium flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50">
-              {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> 检测中...</> : '提交检测'}
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="px-8 py-3 rounded-lg text-white font-medium flex items-center gap-2"
+              style={{ background: isSubmitting ? '#9ca3af' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+            >
+              {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> 提交中...</> : '提交检测'}
             </button>
           )}
         </div>
