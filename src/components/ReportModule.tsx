@@ -137,8 +137,13 @@ export default function ReportModule() {
           )}
 
           {/* 行业基准对比 */}
-          {reportContent?.industryBenchmarks && reportContent.industryBenchmarks.length > 0 && (
+          {reportContent?.industryBenchmarks && reportContent.industryBenchmarks.items?.length > 0 && (
             <Section title="行业基准对比">
+              {reportContent.industryBenchmarks?.industry && (
+                <div style={{ fontSize: 13, color: C.gray, marginBottom: 12 }}>
+                  行业：{reportContent.industryBenchmarks.industry || basicInfo?.industry}
+                </div>
+              )}
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: '#f9fafb' }}>
@@ -149,7 +154,7 @@ export default function ReportModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportContent.industryBenchmarks.map((item, i) => (
+                  {reportContent.industryBenchmarks.items.map((item, i) => (
                     <tr key={i}>
                       <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.name}</td>
                       <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.benchmarkMin}% ~ {item.benchmarkMax}%</td>
