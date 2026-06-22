@@ -23,7 +23,6 @@ interface FormData {
   creditCode: string
   contactPerson: string
   contactPhone: string
-  customerEmail: string
   industry: string
   revenueScale: string
   invoiceAnswers: Record<string, number>
@@ -88,7 +87,6 @@ const safeCreateInitialFormData = (): FormData => {
       creditCode: '',
       contactPerson: '',
       contactPhone: '',
-      customerEmail: '',
       industry: '',
       revenueScale: '',
       invoiceAnswers: {},
@@ -106,7 +104,7 @@ const safeCreateInitialFormData = (): FormData => {
   } catch {
     return {
       enterpriseName: '', creditCode: '', contactPerson: '', contactPhone: '',
-      customerEmail: '', industry: '', revenueScale: '',
+      industry: '', revenueScale: '',
       invoiceAnswers: {}, revenueAnswers: {}, publicPrivateAnswers: {}, taxAnswers: {},
       financialData: [
         { ...safeCreateEmptyPeriod('2026-04', 'latest') },
@@ -314,7 +312,6 @@ export default function RiskV4Module() {
         creditCode: formData.creditCode,
         contactPerson: formData.contactPerson,
         contactPhone: formData.contactPhone,
-        customerEmail: formData.customerEmail,
         industry: formData.industry,
         revenueScale: formData.revenueScale,
         invoiceAnswers: formData.invoiceAnswers,
@@ -356,15 +353,22 @@ export default function RiskV4Module() {
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
             <CheckCircle className="w-12 h-12 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold mb-4" style={{ color: '#1f2937' }}>提交成功</h2>
-          <p className="text-lg mb-8" style={{ color: '#4b5563' }}>
-            检测内容已提交，检测报告经人工审核后<span className="font-bold">2小时内</span>会有客服人员联系并发送报告
+          <h2 className="text-2xl font-bold mb-4" style={{ color: '#1f2937' }}>检测报告已生成</h2>
+          <p className="text-lg mb-6" style={{ color: '#4b5563' }}>
+            扫码添加顾问微信，免费获取完整报告
           </p>
+          <div className="mb-8">
+            <img 
+              src="QR_PLACEHOLDER" 
+              alt="顾问微信二维码" 
+              className="w-48 h-48 mx-auto rounded-lg border border-gray-200"
+            />
+          </div>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => window.location.href = '/risk'}
             className="px-8 py-3 rounded-lg text-white font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700"
           >
-            返回首页
+            再次检测
           </button>
         </div>
       </div>
@@ -457,17 +461,6 @@ export default function RiskV4Module() {
                   />
                   {phoneError && <p className="text-red-500 text-xs mt-1">{phoneError}</p>}
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>邮箱</label>
-                <input
-                  type="email"
-                  value={formData.customerEmail}
-                  onChange={e => setFormData(p => ({ ...p, customerEmail: e.target.value }))}
-                  style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="用于接收电子报告"
-                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -755,7 +755,6 @@ export async function POST(request: NextRequest) {
     const creditCode = basicInfo.creditCode || body.creditCode || '';
     const contactPerson = basicInfo.contactName || body.contactName || '';
     const contactPhone = basicInfo.contactPhone || body.contactPhone || '';
-    const customerEmail = basicInfo.customerEmail || body.customerEmail || '';
     const period = body.period || detectionTime.split(' ')[0];
     
     // 高中低风险评分
@@ -820,7 +819,6 @@ export async function POST(request: NextRequest) {
     fields['统一信用代码'] = creditCode;
     fields['联系人'] = contactPerson;
     fields['联系电话'] = contactPhone;
-    fields['客户邮箱'] = customerEmail;
     fields['所属行业'] = industry;
     fields['所属期'] = period;
     fields['年营收规模'] = revenueScale;
