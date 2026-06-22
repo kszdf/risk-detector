@@ -689,26 +689,49 @@ export async function POST(request: NextRequest) {
     const publicPrivateAnswers: Record<string, number> = {};
     const taxPolicyAnswers: Record<string, number> = {};
     
-    // 解析扁平格式
+    // 数组到对象的映射key
+    const invKeys = ['inv1', 'inv2', 'inv3', 'inv4', 'inv5'];
+    const revKeys = ['rev1', 'rev2', 'rev3', 'rev4'];
+    const ppKeys = ['pp1', 'pp2', 'pp3', 'pp4', 'pp5'];
+    const taxKeys = ['tax1', 'tax2', 'tax3', 'tax4', 'tax5'];
+    
+    // 解析扁平格式（支持对象和数组格式）
     if (body.invoiceAnswers && typeof body.invoiceAnswers === 'object') {
-      Object.entries(body.invoiceAnswers).forEach(([key, val]) => {
-        invoiceAnswers[key] = Number(val) || 0;
-      });
+      if (Array.isArray(body.invoiceAnswers)) {
+        // 数组格式 [3, 3, 2, 0, 0] 转换为 {inv1: 3, inv2: 3, ...}
+        invKeys.forEach((k, i) => { invoiceAnswers[k] = Number(body.invoiceAnswers[i]) || 0; });
+      } else {
+        Object.entries(body.invoiceAnswers).forEach(([key, val]) => {
+          invoiceAnswers[key] = Number(val) || 0;
+        });
+      }
     }
     if (body.revenueCostAnswers && typeof body.revenueCostAnswers === 'object') {
-      Object.entries(body.revenueCostAnswers).forEach(([key, val]) => {
-        revenueCostAnswers[key] = Number(val) || 0;
-      });
+      if (Array.isArray(body.revenueCostAnswers)) {
+        revKeys.forEach((k, i) => { revenueCostAnswers[k] = Number(body.revenueCostAnswers[i]) || 0; });
+      } else {
+        Object.entries(body.revenueCostAnswers).forEach(([key, val]) => {
+          revenueCostAnswers[key] = Number(val) || 0;
+        });
+      }
     }
     if (body.publicPrivateAnswers && typeof body.publicPrivateAnswers === 'object') {
-      Object.entries(body.publicPrivateAnswers).forEach(([key, val]) => {
-        publicPrivateAnswers[key] = Number(val) || 0;
-      });
+      if (Array.isArray(body.publicPrivateAnswers)) {
+        ppKeys.forEach((k, i) => { publicPrivateAnswers[k] = Number(body.publicPrivateAnswers[i]) || 0; });
+      } else {
+        Object.entries(body.publicPrivateAnswers).forEach(([key, val]) => {
+          publicPrivateAnswers[key] = Number(val) || 0;
+        });
+      }
     }
     if (body.taxPolicyAnswers && typeof body.taxPolicyAnswers === 'object') {
-      Object.entries(body.taxPolicyAnswers).forEach(([key, val]) => {
-        taxPolicyAnswers[key] = Number(val) || 0;
-      });
+      if (Array.isArray(body.taxPolicyAnswers)) {
+        taxKeys.forEach((k, i) => { taxPolicyAnswers[k] = Number(body.taxPolicyAnswers[i]) || 0; });
+      } else {
+        Object.entries(body.taxPolicyAnswers).forEach(([key, val]) => {
+          taxPolicyAnswers[key] = Number(val) || 0;
+        });
+      }
     }
     
     // 补充解析questionnaire格式
@@ -752,6 +775,10 @@ export async function POST(request: NextRequest) {
       }));
     }
     
+    console.log('financialData 解析后:', JSON.stringify(financialData));
+    console.log('latestData.vatPaid:', financialData[0]?.vatPaid, 'revenue:', financialData[0]?.revenue);
+    console.log('vatRate 计算:', financialData[0]?.revenue > 0 ? (financialData[0]?.vatPaid / financialData[0]?.revenue) * 100 : 0);
+    
     // 获取基本信息
     const industry = body.industry || '';
     const revenueScale = body.revenueScale || '';
@@ -762,10 +789,15 @@ export async function POST(request: NextRequest) {
     const customerEmail = body.customerEmail || '';
     const period = body.period || detectionTime.split(' ')[0];
     
+    // ===== 调试日志 =====
+    console.log('收到请求体 questionnaire:', JSON.stringify(body.questionnaire));
+    console.log('收到请求体 financialData:', JSON.stringify(body.financialData?.slice(0, 1)));
+    
     // ===== 新版评分逻辑：高中低风险计数 =====
     
     // 1. 问卷风险项映射
     const allAnswers = { ...invoiceAnswers, ...revenueCostAnswers, ...publicPrivateAnswers, ...taxPolicyAnswers };
+    console.log('合并后的 allAnswers:', JSON.stringify(allAnswers));
     const allRiskItems: RiskItem[] = [];
     
     Object.entries(allAnswers).forEach(([key, score]) => {
@@ -776,6 +808,10 @@ export async function POST(request: NextRequest) {
     const highRiskItems = allRiskItems.filter(i => i.level === 'high');
     const mediumRiskItems = allRiskItems.filter(i => i.level === 'medium');
     const lowRiskItems = allRiskItems.filter(i => i.level === 'low');
+    
+    console.log('allAnswers:', JSON.stringify(allAnswers));
+    console.log('allRiskItems 数量:', allRiskItems.length);
+    console.log('highRiskItems:', highRiskItems.length, 'mediumRiskItems:', mediumRiskItems.length, 'lowRiskItems:', lowRiskItems.length);
     
     // 2. 交叉验证风险
     const crossValidation = calculateCrossValidation(financialData, industry);
