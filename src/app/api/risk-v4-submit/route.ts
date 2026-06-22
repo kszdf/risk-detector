@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// ============== 飞书API配置 ==============
+// 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
 const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
 const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || '';
 
-// ============== 行业基准数据 ==============
+// 行业基准数据
 const INDUSTRY_BENCHMARKS: Record<string, {
   grossMargin: { min: number; max: number };
   netMargin: { min: number; max: number };
@@ -24,7 +24,7 @@ const INDUSTRY_BENCHMARKS: Record<string, {
   '其他': { grossMargin: { min: 20, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } }
 };
 
-// ============== 问卷题目完整映射（带影响说明和后果）- 使用前端实际ID格式==============
+// 问卷题目完整映射（带影响说明和后果）
 interface QuestionInfo {
   module: string;
   moduleName: string;
@@ -58,7 +58,7 @@ const QUESTION_MAPPING: Record<string, QuestionInfo> = {
   'tax5': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '被稽查/纳税评估', consequence: '再次被稽查概率显著提高' }
 };
 
-// ============== 辅助函数 ==============
+// 辅助函数 = 
 function getFeishuToken(): Promise<string | null> {
   return fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
@@ -83,7 +83,7 @@ function generateRiskId(): string {
   return `RC${datePart}${random}`;
 }
 
-// ============== 新版财务数据类型（4期分层） ==============
+// 新版财务数据类型（4期分层） = 
 interface FinancialPeriod {
   period: string;
   type: 'latest' | 'annual';
@@ -99,7 +99,7 @@ interface FinancialPeriod {
   advanceReceived: number; // 预收账款
 }
 
-// ============== 风险项结构 ==============
+// 风险项结构 = 
 type RiskLevel = 'high' | 'medium' | 'low';
 
 interface RiskItem {
@@ -113,7 +113,7 @@ interface RiskItem {
   consequence: string;
 }
 
-// ============== 财务指标计算 ==============
+// 财务指标计算 = 
 function calculateMetrics(data: FinancialPeriod) {
   const grossMargin = data.revenue > 0 ? ((data.revenue - data.cost) / data.revenue) * 100 : 0;
   const netMargin = data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0;
@@ -124,7 +124,7 @@ function calculateMetrics(data: FinancialPeriod) {
   return { grossMargin, netMargin, vatRate, citRate, debtRatio };
 }
 
-// ============== 问卷风险项映射 ==============
+// 问卷风险项映射 = 
 function mapQuestionToRisk(key: string, score: number, answers: Record<string, number>): RiskItem | null {
   const info = QUESTION_MAPPING[key];
   if (!info) return null;
@@ -165,7 +165,7 @@ function mapQuestionToRisk(key: string, score: number, answers: Record<string, n
   };
 }
 
-// ============== 交叉验证风险等级映射 ==============
+// 交叉验证风险等级映射 = 
 interface CrossValidationItem {
   rule: string;
   level: RiskLevel;
@@ -301,7 +301,7 @@ function calculateCrossValidation(
   return result;
 }
 
-// ============== 趋势预警风险等级映射 ==============
+// 趋势预警风险等级映射 = 
 interface TrendWarningItem {
   type: string;
   label: string;
@@ -474,7 +474,7 @@ function calculateTrendWarnings(financialData: FinancialPeriod[]): TrendWarningI
   return result;
 }
 
-// ============== 综合风险等级判定 ==============
+// 综合风险等级判定 = 
 function determineOverallLevel(redCount: number, yellowCount: number): { level: string; icon: string } {
   if (redCount >= 5) return { level: '极高风险', icon: '🔴' };
   if (redCount >= 3) return { level: '高风险', icon: '🟠' };
@@ -484,7 +484,7 @@ function determineOverallLevel(redCount: number, yellowCount: number): { level: 
   return { level: '低风险', icon: '🟢' };
 }
 
-// ============== 获取数据完整度信息 ==============
+// 获取数据完整度信息 = 
 function getDataCompleteness(data: FinancialPeriod[]): { count: number; msg: string } {
   const filledCount = data.filter(d => d.revenue > 0 || d.profit > 0).length;
   
@@ -500,7 +500,7 @@ function getDataCompleteness(data: FinancialPeriod[]): { count: number; msg: str
   return { count: filledCount, msg: '' };
 }
 
-// ============== 预估风险金额计算（仅基于🔴🟡项）==============
+// 预估风险金额计算（仅基于🔴🟡项）==============
 interface EstimatedRiskItem {
   name: string;
   level: string;
@@ -579,7 +579,7 @@ function calculateEstimatedRisk(
   return result;
 }
 
-// ============== 报告内容生成（新版JSON结构）==============
+// 报告内容生成（新版JSON结构）==============
 function generateReportContent(params: {
   riskId: string;
   period: string;
@@ -652,7 +652,7 @@ function generateReportContent(params: {
   }, null, 2);
 }
 
-// ============== 飞书写入 ==============
+// 飞书写入 = 
 async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> {
   const token = await getFeishuToken();
   if (!token) return false;
@@ -674,17 +674,16 @@ async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> 
   return true;
 }
 
-// ============== 主处理函数 ==============
+// 主处理函数 = 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log('收到V4检测数据:', JSON.stringify(body, null, 2));
     
     // 生成ID和时间
     const riskId = generateRiskId();
     const detectionTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
-    // 问卷答案从 body.questionnaire 读取（不是 body）
+    // 问卷答案从 body.questionnaire 读取
     const questionnaire = body.questionnaire || {};
     
     // 解析问卷答案（支持对象格式 {inv1: 3, inv2: 3, ...}）
@@ -693,57 +692,21 @@ export async function POST(request: NextRequest) {
     const publicPrivateAnswers: Record<string, number> = {};
     const taxPolicyAnswers: Record<string, number> = {};
     
-    // 数组到对象的映射key
-    const invKeys = ['inv1', 'inv2', 'inv3', 'inv4', 'inv5'];
-    const revKeys = ['rev1', 'rev2', 'rev3', 'rev4'];
-    const ppKeys = ['pp1', 'pp2', 'pp3', 'pp4', 'pp5'];
-    const taxKeys = ['tax1', 'tax2', 'tax3', 'tax4', 'tax5'];
-    
-    // 解析问卷答案（从 body.questionnaire 读取）
-    const parseAnswers = (src: unknown, target: Record<string, number>, keys: string[]) => {
+    // 解析问卷答案
+    const parseAnswers = (src: unknown, target: Record<string, number>) => {
       if (src && typeof src === 'object') {
-        if (Array.isArray(src)) {
-          // 数组格式
-          keys.forEach((k, i) => { target[k] = Number((src as number[])[i]) || 0; });
-        } else {
-          // 对象格式 {inv1: 3, inv2: 3, ...}
-          Object.entries(src as Record<string, unknown>).forEach(([key, val]) => {
-            target[key] = Number(val) || 0;
-          });
-        }
+        Object.entries(src as Record<string, unknown>).forEach(([key, val]) => {
+          target[key] = Number(val) || 0;
+        });
       }
     };
     
-    parseAnswers(questionnaire.invoiceAnswers, invoiceAnswers, invKeys);
-    parseAnswers(questionnaire.revenueCostAnswers, revenueCostAnswers, revKeys);
-    parseAnswers(questionnaire.publicPrivateAnswers, publicPrivateAnswers, ppKeys);
-    parseAnswers(questionnaire.taxPolicyAnswers, taxPolicyAnswers, taxKeys);
+    parseAnswers(questionnaire.invoiceAnswers, invoiceAnswers);
+    parseAnswers(questionnaire.revenueCostAnswers, revenueCostAnswers);
+    parseAnswers(questionnaire.publicPrivateAnswers, publicPrivateAnswers);
+    parseAnswers(questionnaire.taxPolicyAnswers, taxPolicyAnswers);
     
-    // 补充解析兼容旧格式
-    if (questionnaire.invoiceAnswers && typeof questionnaire.invoiceAnswers === 'object' && !Array.isArray(questionnaire.invoiceAnswers)) {
-      Object.entries(questionnaire.invoiceAnswers).forEach(([key, val]) => {
-        if (!invoiceAnswers[key]) invoiceAnswers[key] = Number(val) || 0;
-      });
-    }
-    if (questionnaire.revenueCostAnswers && typeof questionnaire.revenueCostAnswers === 'object' && !Array.isArray(questionnaire.revenueCostAnswers)) {
-      Object.entries(questionnaire.revenueCostAnswers).forEach(([key, val]) => {
-        if (!revenueCostAnswers[key]) revenueCostAnswers[key] = Number(val) || 0;
-      });
-    }
-    if (questionnaire.publicPrivateAnswers && typeof questionnaire.publicPrivateAnswers === 'object' && !Array.isArray(questionnaire.publicPrivateAnswers)) {
-      Object.entries(questionnaire.publicPrivateAnswers).forEach(([key, val]) => {
-        if (!publicPrivateAnswers[key]) publicPrivateAnswers[key] = Number(val) || 0;
-      });
-    }
-    if (questionnaire.taxPolicyAnswers && typeof questionnaire.taxPolicyAnswers === 'object' && !Array.isArray(questionnaire.taxPolicyAnswers)) {
-      Object.entries(questionnaire.taxPolicyAnswers).forEach(([key, val]) => {
-        if (!taxPolicyAnswers[key]) taxPolicyAnswers[key] = Number(val) || 0;
-      });
-    }
-    
-    console.log('解析后问卷答案:', { invoiceAnswers, revenueCostAnswers, publicPrivateAnswers, taxPolicyAnswers });
-    
-    // 解析财务数据（使用前端实际字段名: vat, cit, accountsReceivable, advanceReceived）
+    // 解析财务数据（使用前端实际字段名）
     let financialData: FinancialPeriod[] = [];
     if (body.financialData && Array.isArray(body.financialData)) {
       financialData = body.financialData.map((d: Record<string, unknown>): FinancialPeriod => ({
@@ -752,19 +715,15 @@ export async function POST(request: NextRequest) {
         revenue: getNumber(d.revenue),
         cost: getNumber(d.cost),
         profit: getNumber(d.profit),
-        vat: getNumber(d.vat),                    // 增值税
-        cit: getNumber(d.cit),                    // 所得税
+        vat: getNumber(d.vat),
+        cit: getNumber(d.cit),
         totalAssets: getNumber(d.totalAssets),
         totalLiabilities: getNumber(d.totalLiabilities),
-        accountsReceivable: getNumber(d.accountsReceivable), // 应收账款
+        accountsReceivable: getNumber(d.accountsReceivable),
         inventory: getNumber(d.inventory),
-        advanceReceived: getNumber(d.advanceReceived)  // 预收账款
+        advanceReceived: getNumber(d.advanceReceived)
       }));
     }
-    
-    console.log('financialData 解析后:', JSON.stringify(financialData));
-    console.log('latestData.vat:', financialData[0]?.vat, 'revenue:', financialData[0]?.revenue);
-    console.log('vatRate 计算:', financialData[0]?.revenue > 0 ? (financialData[0]?.vat / financialData[0]?.revenue) * 100 : 0);
     
     // 获取基本信息
     const industry = body.industry || '';
@@ -776,15 +735,10 @@ export async function POST(request: NextRequest) {
     const customerEmail = body.customerEmail || '';
     const period = body.period || detectionTime.split(' ')[0];
     
-    // ===== 调试日志 =====
-    console.log('收到请求体 questionnaire:', JSON.stringify(body.questionnaire));
-    console.log('收到请求体 financialData:', JSON.stringify(body.financialData?.slice(0, 1)));
-    
-    // ===== 新版评分逻辑：高中低风险计数 =====
+    // ===== 高中低风险评分 =====
     
     // 1. 问卷风险项映射
     const allAnswers = { ...invoiceAnswers, ...revenueCostAnswers, ...publicPrivateAnswers, ...taxPolicyAnswers };
-    console.log('合并后的 allAnswers:', JSON.stringify(allAnswers));
     const allRiskItems: RiskItem[] = [];
     
     Object.entries(allAnswers).forEach(([key, score]) => {
@@ -795,10 +749,6 @@ export async function POST(request: NextRequest) {
     const highRiskItems = allRiskItems.filter(i => i.level === 'high');
     const mediumRiskItems = allRiskItems.filter(i => i.level === 'medium');
     const lowRiskItems = allRiskItems.filter(i => i.level === 'low');
-    
-    console.log('allAnswers:', JSON.stringify(allAnswers));
-    console.log('allRiskItems 数量:', allRiskItems.length);
-    console.log('highRiskItems:', highRiskItems.length, 'mediumRiskItems:', mediumRiskItems.length, 'lowRiskItems:', lowRiskItems.length);
     
     // 2. 交叉验证风险
     const crossValidation = calculateCrossValidation(financialData, industry);
@@ -933,8 +883,6 @@ export async function POST(request: NextRequest) {
       crossValidation,
       dataCompleteness
     });
-    
-    console.log('写入飞书字段:', JSON.stringify(fields, null, 2));
     
     // 写入飞书
     const feishuSuccess = await writeToFeishu(fields);
