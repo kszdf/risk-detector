@@ -555,7 +555,7 @@ function generateReportContent(params: {
   lowRiskItems: string[];
   trend: Array<{ period: string; metrics: ReturnType<typeof calculateMetrics> }>;
   trendWarnings: TrendWarningItem[];
-  estimatedRisk:
+  industryBenchmarks: IndustryBenchmarkItem[];
   crossValidation: CrossValidationItem[];
   dataCompleteness: { count: number; msg: string };
 }): string {
