@@ -128,7 +128,7 @@ export default function ReportModule() {
             <Section title="趋势预警">
               {reportContent.trendWarnings.map((w, i) => (
                 <div key={i} style={{ padding: '8px 0', borderBottom: i < reportContent.trendWarnings.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                  <span style={{ color: w.level === 'red' ? C.red : C.yellow, marginRight: 8 }}>⚠️</span>
+                  <span style={{ color: w.level === '🔴' ? C.red : C.yellow, marginRight: 8 }}>⚠️</span>
                   <strong>{w.label}</strong>：{w.detail}
                   {w.consequence && <div style={{ fontSize: 13, color: C.gray, marginTop: 2 }}>建议：{w.consequence}</div>}
                 </div>
@@ -171,7 +171,7 @@ export default function ReportModule() {
             <Section title="交叉验证">
               {reportContent.crossValidation.map((c, i) => (
                 <div key={i} style={{ padding: '8px 0', borderBottom: i < reportContent.crossValidation.length - 1 ? `1px solid ${C.border}` : 'none', display: 'flex', gap: 8 }}>
-                  <span style={{ color: c.level === 'red' ? C.red : C.yellow }}>{c.level === 'red' ? '🔴' : '🟡'}</span>
+                  <span style={{ color: c.level === '🔴' ? C.red : C.yellow }}>{c.level === '🔴' ? '🔴' : '🟡'}</span>
                   <span><strong>{c.rule || c.name}</strong>：{c.detail}</span>
                 </div>
               ))}

@@ -53,6 +53,11 @@ export async function GET(req: NextRequest) {
 
   // 解析报告内容
   const reportContent = extractJsonField(fields['报告内容'])
+  
+  // 修复 industryBenchmarks 数据结构
+  if (reportContent?.industryBenchmarks && Array.isArray(reportContent.industryBenchmarks)) {
+    reportContent.industryBenchmarks = { industry: extractFeishuText(fields['所属行业']) || '', items: reportContent.industryBenchmarks }
+  }
 
   // 提取风险统计
   let riskCounts = { red: 0, yellow: 0, green: 0 }

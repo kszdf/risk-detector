@@ -122,12 +122,11 @@ interface RiskItem {
 
 // 财务指标计算 = 
 function calculateMetrics(data: FinancialPeriod) {
-  const grossMargin = data.revenue > 0 ? ((data.revenue - data.cost) / data.revenue) * 100 : 0;
-  const netMargin = data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0;
-  // 使用正确字段名: vat 和 cit
-  const vatRate = data.revenue > 0 ? (data.vat / data.revenue) * 100 : 0;
-  const citRate = data.revenue > 0 ? (data.cit / data.revenue) * 100 : 0;
-  const debtRatio = data.totalAssets > 0 ? (data.totalLiabilities / data.totalAssets) * 100 : 0;
+  const grossMargin = data.revenue > 0 ? parseFloat(((data.revenue - data.cost) / data.revenue * 100).toFixed(1)) : 0;
+  const netMargin = data.revenue > 0 ? parseFloat((data.profit / data.revenue * 100).toFixed(1)) : 0;
+  const vatRate = data.revenue > 0 ? parseFloat((data.vat / data.revenue * 100).toFixed(2)) : 0;
+  const citRate = data.revenue > 0 ? parseFloat((data.cit / data.revenue * 100).toFixed(2)) : 0;
+  const debtRatio = data.totalAssets > 0 ? parseFloat((data.totalLiabilities / data.totalAssets * 100).toFixed(1)) : 0;
   return { grossMargin, netMargin, vatRate, citRate, debtRatio };
 }
 
@@ -536,7 +535,7 @@ function calculateIndustryBenchmarks(
     { name: '企业所得税税负率', unit: '%', benchmarkMin: benchmark.citRate.min, benchmarkMax: benchmark.citRate.max, actual: metrics.citRate, status: getStatus(metrics.citRate, benchmark.citRate.min, benchmark.citRate.max) },
     { name: '增值税税负率', unit: '%', benchmarkMin: benchmark.vatRate.min, benchmarkMax: benchmark.vatRate.max, actual: metrics.vatRate, status: getStatus(metrics.vatRate, benchmark.vatRate.min, benchmark.vatRate.max) },
     { name: '净利率', unit: '%', benchmarkMin: benchmark.netMargin.min, benchmarkMax: benchmark.netMargin.max, actual: metrics.netMargin, status: getStatus(metrics.netMargin, benchmark.netMargin.min, benchmark.netMargin.max) },
-    { name: '资产负债率', unit: '%', benchmarkMin: 30, benchmarkMax: 70, actual: metrics.debtRatio, status: getStatus(metrics.debtRatio, 30, 70) }
+    { name: '资产负债率', unit: '%', benchmarkMin: 0, benchmarkMax: 70, actual: metrics.debtRatio, status: getStatus(metrics.debtRatio, 0, 70) }
   ];
 }
 
