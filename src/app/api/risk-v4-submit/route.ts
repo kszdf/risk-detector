@@ -679,6 +679,38 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('收到V4检测数据:', JSON.stringify(body, null, 2));
     
+    // ============== DEBUG: 返回数据结构诊断 ==============
+    // 诊断字段名
+    const debug = {
+      // 问卷字段
+      hasInvoiceAnswers: !!body.invoiceAnswers,
+      invoiceAnswersType: Array.isArray(body.invoiceAnswers) ? 'array' : typeof body.invoiceAnswers,
+      invoiceAnswersSample: Array.isArray(body.invoiceAnswers) ? body.invoiceAnswers.slice(0, 3) : (typeof body.invoiceAnswers === 'object' ? Object.keys(body.invoiceAnswers || {}).slice(0, 3) : null),
+      
+      hasRevenueAnswers: !!body.revenueAnswers,
+      hasRevenueCostAnswers: !!body.revenueCostAnswers,
+      
+      hasTaxAnswers: !!body.taxAnswers,
+      hasTaxPolicyAnswers: !!body.taxPolicyAnswers,
+      
+      hasPublicPrivateAnswers: !!body.publicPrivateAnswers,
+      
+      // 财务数据字段
+      financialDataType: Array.isArray(body.financialData) ? 'array' : typeof body.financialData,
+      financialDataSample: Array.isArray(body.financialData) && body.financialData.length > 0 ? body.financialData[0] : null,
+      
+      // 前端发送的所有顶层key
+      topLevelKeys: Object.keys(body || {}),
+    };
+    
+    // 临时返回debug信息用于诊断
+    return Response.json({ 
+      success: true, 
+      debug,
+      message: 'DEBUG模式 - 数据结构诊断' 
+    });
+    // ============== DEBUG END ==============*/
+    
     // 生成ID和时间
     const riskId = generateRiskId();
     const detectionTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
