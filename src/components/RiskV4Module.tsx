@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Loader2, CheckCircle, ArrowRight } from 'lucide-react'
 
 // ============ 类型定义 ============
@@ -35,10 +35,38 @@ interface FormData {
 }
 
 // ============ 安全工具函数 ============
-const safeGetYearOptions = (): number[] => {
+// 获取最近2个月份选项（如当前6月，返回5月和4月）
+const safeGetLatestMonthOptions = (): { value: string; label: string }[] => {
   try {
     const now = new Date()
-    return [now.getFullYear() - 1, now.getFullYear() - 2, now.getFullYear() - 3]
+    const y = now.getFullYear()
+    const m = now.getMonth() + 1 // 1-12
+    const options: { value: string; label: string }[] = []
+    
+    // 最近2个月
+    for (let i = 1; i <= 2; i++) {
+      let month = m - i
+      let year = y
+      if (month <= 0) {
+        month = 12 + month
+        year = y - 1
+      }
+      options.push({
+        value: `${year}-${String(month).padStart(2, '0')}`,
+        label: `${year}年${month}月`
+      })
+    }
+    return options
+  } catch { return [{ value: '2026-05', label: '2026年5月' }, { value: '2026-04', label: '2026年4月' }] }
+}
+
+// 根据最新月份计算前3个年度选项
+const safeGetYearOptions = (latestMonth: string): number[] => {
+  try {
+    if (!latestMonth) return [2025, 2024, 2023]
+    const year = parseInt(latestMonth.split('-')[0])
+    if (isNaN(year)) return [2025, 2024, 2023]
+    return [year - 1, year - 2, year - 3]
   } catch { return [2025, 2024, 2023] }
 }
 
@@ -233,7 +261,11 @@ export default function RiskV4Module() {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [phoneError, setPhoneError] = useState('')
   const [creditCodeError, setCreditCodeError] = useState('')
-  const yearOptions = safeGetYearOptions()
+  
+  // 根据最新月份动态计算年度选项
+  const yearOptions = useMemo(() => safeGetYearOptions(formData.latestMonth), [formData.latestMonth])
+  // 月份选项
+  const monthOptions = useMemo(() => safeGetLatestMonthOptions(), [])
 
   useEffect(() => { setIsHydrated(true) }, [])
 
@@ -544,8 +576,9 @@ export default function RiskV4Module() {
                   style={{ backgroundColor: '#ffffff', color: '#1f2937' }}
                   className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="2026-04">2026-04</option>
-                  <option value="2026-05">2026-05</option>
+                  {monthOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
