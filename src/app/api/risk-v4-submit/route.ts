@@ -139,15 +139,17 @@ function mapQuestionToRisk(key: string, score: number, answers: Record<string, n
   let level: RiskLevel;
   let levelIcon: string;
   
-  if (score === 0) {
-    level = 'low';
-    levelIcon = '🟢';
-  } else if (score <= 2) {
+  // 前端分数含义：10=完全合规、7=基本合规、4=有问题、0=严重违规
+  // 风险等级：合规度越低，风险越高
+  if (score <= 2) {
+    level = 'high';
+    levelIcon = '🔴';
+  } else if (score <= 5) {
     level = 'medium';
     levelIcon = '🟡';
   } else {
-    level = 'high';
-    levelIcon = '🔴';
+    level = 'low';
+    levelIcon = '🟢';
   }
   
   // 影响说明
