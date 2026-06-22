@@ -1,6 +1,21 @@
 'use server'
 import { NextRequest, NextResponse } from 'next/server'
 
+// 提取飞书文本字段内容
+function extractFeishuText(field: any): string {
+  if (!field) return ''
+  if (typeof field === 'string') return field
+  if (Array.isArray(field)) return field.map((item: any) => item.text || '').join('')
+  return String(field)
+}
+
+// 提取并解析JSON字段
+function extractJsonField(field: any): any {
+  const raw = extractFeishuText(field)
+  if (!raw) return null
+  try { return JSON.parse(raw) } catch { return null }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const riskId = searchParams.get('riskId')
@@ -34,46 +49,40 @@ export async function GET(req: NextRequest) {
   const searchData = await searchRes.json()
   if (!searchData.data?.items?.length) return NextResponse.json({ error: '未找到记录' }, { status: 404 })
 
-  const record = searchData.data.items[0]
-  const fields = record.fields || {}
+  const fields = searchData.data.items[0].fields || {}
 
   // 解析报告内容
-  let reportContent = null
-  try {
-    const raw = fields['报告内容'] || fields['reportContent'] || ''
-    reportContent = typeof raw === 'string' ? JSON.parse(raw) : raw
-  } catch { reportContent = null }
+  const reportContent = extractJsonField(fields['报告内容'])
 
   // 提取风险统计
-  const overview = reportContent?.overview || {}
-  const riskCounts = {
-    red: overview.redCount || 0,
-    yellow: overview.yellowCount || 0,
-    green: overview.greenCount || 0
-  }
-
-  // 兼容旧格式
-  if (!overview.redCount && fields['综合得分']) {
-    const score = Number(fields['综合得分']) || 0
-    const level = fields['综合风险等级'] || ''
-    riskCounts.red = level.includes('极高') || level.includes('高') ? Math.floor(score / 10) : 0
-    riskCounts.yellow = level.includes('中') ? Math.floor(score % 10) : 0
-    riskCounts.green = 20 - riskCounts.red - riskCounts.yellow
+  let riskCounts = { red: 0, yellow: 0, green: 0 }
+  if (reportContent?.overview) {
+    riskCounts = {
+      red: reportContent.overview.redCount || 0,
+      yellow: reportContent.overview.yellowCount || 0,
+      green: reportContent.overview.greenCount || 0
+    }
+  } else if (reportContent?.highRiskItems) {
+    riskCounts = {
+      red: reportContent.highRiskItems?.length || 0,
+      yellow: reportContent.mediumRiskItems?.length || 0,
+      green: reportContent.lowRiskItems?.length || 0
+    }
   }
 
   return NextResponse.json({
     basicInfo: {
-      enterpriseName: fields['企业名称'] || '',
-      contactPerson: fields['联系人'] || '',
-      contactPhone: fields['联系电话'] || '',
-      industry: fields['所属行业'] || '',
-      revenueScale: fields['年营收规模'] || '',
-      creditCode: fields['统一信用代码'] || ''
+      enterpriseName: extractFeishuText(fields['企业名称']),
+      contactPerson: extractFeishuText(fields['联系人']),
+      contactPhone: extractFeishuText(fields['联系电话']),
+      industry: extractFeishuText(fields['所属行业']),
+      revenueScale: extractFeishuText(fields['年营收规模']),
+      creditCode: extractFeishuText(fields['统一信用代码'])
     },
-    riskLevel: fields['综合风险等级'] || '未知',
+    riskLevel: extractFeishuText(fields['综合风险等级']) || '未知',
     riskCounts,
     reportContent,
     financialIndicators: reportContent?.financialIndicators || null,
-    createdAt: fields['检测时间'] || fields['created_at'] || ''
+    createdAt: extractFeishuText(fields['检测时间']) || ''
   })
 }
