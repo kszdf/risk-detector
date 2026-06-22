@@ -655,7 +655,12 @@ function generateReportContent(params: {
 // 飞书写入 = 
 async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> {
   const token = await getFeishuToken();
-  if (!token) return false;
+  if (!token) {
+    console.error('飞书写入失败: 无法获取token');
+    return false;
+  }
+  console.log('飞书token获取成功，准备写入...');
+  console.log('fields keys:', Object.keys(fields).join(','));
   
   const response = await fetch(
     `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`,
@@ -667,10 +672,12 @@ async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> 
   );
   
   const result = await response.json();
+  console.log('飞书API响应:', JSON.stringify(result));
   if (!response.ok || result.code !== 0) {
     console.error('飞书写入失败:', result);
     return false;
   }
+  console.log('飞书写入成功!');
   return true;
 }
 
