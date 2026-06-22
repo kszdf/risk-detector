@@ -14,7 +14,7 @@ interface ReportData {
     trendWarnings: { label: string; level: string; detail: string; consequence: string }[]
     crossValidation: { name: string; rule?: string; level: string; detail: string }[]
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
-    industryBenchmarks: { items: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] }
+    industryBenchmarks: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] | null
   } | null
   createdAt: string
 }
@@ -137,7 +137,7 @@ export default function ReportModule() {
           )}
 
           {/* 行业基准对比 */}
-          {reportContent?.industryBenchmarks?.items && reportContent.industryBenchmarks.items.length > 0 && (
+          {reportContent?.industryBenchmarks && reportContent.industryBenchmarks.length > 0 && (
             <Section title="行业基准对比">
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -149,7 +149,7 @@ export default function ReportModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reportContent.industryBenchmarks.items.map((item, i) => (
+                  {reportContent.industryBenchmarks.map((item, i) => (
                     <tr key={i}>
                       <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.name}</td>
                       <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}` }}>{item.benchmarkMin}% ~ {item.benchmarkMax}%</td>
