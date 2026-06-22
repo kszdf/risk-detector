@@ -674,6 +674,29 @@ async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> 
   return true;
 }
 
+// 飞书消息通知
+async function sendFeishuNotification(params: { riskId: string; companyName: string; contactName: string; contactPhone: string; industry: string; riskLevel: string }) {
+  try {
+    const token = await getFeishuToken();
+    if (!token) return;
+    const { riskId, companyName, contactName, contactPhone, industry, riskLevel } = params;
+    const reportUrl = `https://pq3s843fph.coze.site/report?riskId=${riskId}`;
+    const content = JSON.stringify({
+      config: { wide_screen_mode: true },
+      header: { title: { tag: 'plain_text', content: '🔔 新客户风险筛查提交' }, template: 'blue' },
+      elements: [{
+        tag: 'div',
+        text: { tag: 'lark_md', content: `📋 企业：${companyName || '未填写'}\n👤 联系人：${contactName || '未填写'}\n📱 电话：${contactPhone || '未填写'}\n🏢 行业：${industry || '未填写'}\n⚠️ 风险等级：${riskLevel}\n\n👉 [点击查看报告](${reportUrl})` }
+      }]
+    });
+    await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receive_id: 'ou_087603bf00f651705ab95a1775b6b1a2', msg_type: 'interactive', content })
+    });
+  } catch (e) { console.error('通知发送失败:', e); }
+}
+
 // 主处理函数 = 
 export async function POST(request: NextRequest) {
   try {
@@ -884,8 +907,11 @@ export async function POST(request: NextRequest) {
       dataCompleteness
     });
     
-    // 写入飞书
+    // 写入飞书并发送通知
     const feishuSuccess = await writeToFeishu(fields);
+    if (feishuSuccess) {
+      sendFeishuNotification({ riskId, companyName: String(fields['企业名称'] || ''), contactName: String(fields['联系人'] || ''), contactPhone: String(fields['联系电话'] || ''), industry: String(fields['所属行业'] || ''), riskLevel: overallLevel });
+    }
     
     return NextResponse.json({
       success: true,
