@@ -748,14 +748,15 @@ export async function POST(request: NextRequest) {
       }));
     }
     
-    // 获取基本信息
-    const industry = body.industry || '';
-    const revenueScale = body.revenueScale || '';
-    const enterpriseName = body.enterpriseName || '';
-    const creditCode = body.creditCode || '';
-    const contactPerson = body.contactPerson || '';
-    const contactPhone = body.contactPhone || '';
-    const customerEmail = body.customerEmail || '';
+    // 获取基本信息（从 body.basicInfo 读取）
+    const basicInfo = body.basicInfo || {};
+    const industry = basicInfo.industry || body.industry || '';
+    const revenueScale = basicInfo.revenueScale || body.revenueScale || '';
+    const enterpriseName = basicInfo.companyName || body.enterpriseName || '';
+    const creditCode = basicInfo.creditCode || body.creditCode || '';
+    const contactPerson = basicInfo.contactName || body.contactName || '';
+    const contactPhone = basicInfo.contactPhone || body.contactPhone || '';
+    const customerEmail = basicInfo.customerEmail || body.customerEmail || '';
     const period = body.period || detectionTime.split(' ')[0];
     
     // ===== 高中低风险评分 =====
