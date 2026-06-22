@@ -13,7 +13,7 @@ interface ReportData {
     lowRiskItems: string[]
     trendWarnings: { label: string; level: string; detail: string; consequence: string }[]
     estimatedRiskAmount: { items: { name: string; taxMin: number; taxMax: number; penaltyMin: number; penaltyMax: number }[]; totalMin: number; totalMax: number }
-    crossValidation: { name: string; level: string; detail: string }[]
+    crossValidation: { name: string; rule?: string; level: string; detail: string }[]
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
   } | null
   createdAt: string
@@ -169,9 +169,41 @@ export default function ReportModule() {
               {reportContent.crossValidation.map((c, i) => (
                 <div key={i} style={{ padding: '8px 0', borderBottom: i < reportContent.crossValidation.length - 1 ? `1px solid ${C.border}` : 'none', display: 'flex', gap: 8 }}>
                   <span style={{ color: c.level === 'red' ? C.red : C.yellow }}>{c.level === 'red' ? '🔴' : '🟡'}</span>
-                  <span><strong>{c.name}</strong>：{c.detail}</span>
+                  <span><strong>{c.rule || c.name}</strong>：{c.detail}</span>
                 </div>
               ))}
+            </Section>
+          )}
+
+          {/* 财务指标对比 */}
+          {reportContent && reportContent.financialIndicators?.length > 0 && (
+            <Section title="财务指标对比">
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'center', padding: 8, borderBottom: `2px solid ${C.border}` }}>期间</th>
+                      <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>毛利率</th>
+                      <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>净利率</th>
+                      <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>增值税税负率</th>
+                      <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>所得税贡献率</th>
+                      <th style={{ textAlign: 'right', padding: 8, borderBottom: `2px solid ${C.border}` }}>资产负债率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportContent.financialIndicators.map((ind, i) => (
+                      <tr key={i} style={{ background: i === 0 ? '#eff6ff' : 'transparent' }}>
+                        <td style={{ textAlign: 'center', padding: 8, borderBottom: `1px solid ${C.border}`, fontWeight: i === 0 ? 600 : 400 }}>{ind.period}</td>
+                        <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{ind.grossMargin?.toFixed(1)}%</td>
+                        <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{ind.netMargin?.toFixed(1)}%</td>
+                        <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{ind.vatRate?.toFixed(2)}%</td>
+                        <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{ind.citRate?.toFixed(2)}%</td>
+                        <td style={{ textAlign: 'right', padding: 8, borderBottom: `1px solid ${C.border}` }}>{ind.liabilityRatio?.toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Section>
           )}
 

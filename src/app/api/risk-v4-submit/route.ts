@@ -17,10 +17,17 @@ const INDUSTRY_BENCHMARKS: Record<string, {
 }> = {
   '制造业': { grossMargin: { min: 25, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.8, max: 2.0 } },
   '批发零售业': { grossMargin: { min: 15, max: 30 }, netMargin: { min: 2, max: 8 }, vatRate: { min: 1.0, max: 3.0 }, citRate: { min: 0.3, max: 1.5 } },
+  '批发零售': { grossMargin: { min: 15, max: 30 }, netMargin: { min: 2, max: 8 }, vatRate: { min: 1.0, max: 3.0 }, citRate: { min: 0.3, max: 1.5 } },
   '建筑业': { grossMargin: { min: 8, max: 18 }, netMargin: { min: 2, max: 6 }, vatRate: { min: 1.5, max: 3.5 }, citRate: { min: 0.5, max: 1.5 } },
+  '建筑房地产': { grossMargin: { min: 8, max: 18 }, netMargin: { min: 2, max: 6 }, vatRate: { min: 1.5, max: 3.5 }, citRate: { min: 0.5, max: 1.5 } },
   '商务服务业': { grossMargin: { min: 40, max: 60 }, netMargin: { min: 15, max: 30 }, vatRate: { min: 2.5, max: 5.0 }, citRate: { min: 1.0, max: 3.0 } },
+  '其他服务业': { grossMargin: { min: 40, max: 60 }, netMargin: { min: 15, max: 30 }, vatRate: { min: 2.5, max: 5.0 }, citRate: { min: 1.0, max: 3.0 } },
   '生活服务业': { grossMargin: { min: 30, max: 50 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.5 }, citRate: { min: 0.5, max: 2.0 } },
+  '餐饮住宿': { grossMargin: { min: 30, max: 50 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.5 }, citRate: { min: 0.5, max: 2.0 } },
   '科技互联网': { grossMargin: { min: 50, max: 70 }, netMargin: { min: 10, max: 25 }, vatRate: { min: 1.5, max: 4.0 }, citRate: { min: 0.8, max: 2.5 } },
+  '信息技术': { grossMargin: { min: 50, max: 70 }, netMargin: { min: 10, max: 25 }, vatRate: { min: 1.5, max: 4.0 }, citRate: { min: 0.8, max: 2.5 } },
+  '交通运输': { grossMargin: { min: 20, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } },
+  '农林牧渔': { grossMargin: { min: 20, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } },
   '其他': { grossMargin: { min: 20, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } }
 };
 
@@ -648,6 +655,14 @@ function generateReportContent(params: {
       detail: c.detail,
       consequence: c.consequence
     })),
+    financialIndicators: params.trend.map(t => ({
+      period: t.period,
+      vatRate: t.metrics.vatRate,
+      citRate: t.metrics.citRate,
+      grossMargin: t.metrics.grossMargin,
+      netMargin: t.metrics.netMargin,
+      liabilityRatio: t.metrics.debtRatio
+    })),
     suggestion: ''
   }, null, 2);
 }
@@ -705,16 +720,13 @@ export async function POST(request: NextRequest) {
     const riskId = generateRiskId();
     const detectionTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
-    // 问卷答案从 body.questionnaire 读取
+    // 问卷答案：兼容 body.questionnaire.xxx 和 body.xxx（前端直接提交）两种格式
     const questionnaire = body.questionnaire || {};
-    
-    // 解析问卷答案（支持对象格式 {inv1: 3, inv2: 3, ...}）
     const invoiceAnswers: Record<string, number> = {};
     const revenueCostAnswers: Record<string, number> = {};
     const publicPrivateAnswers: Record<string, number> = {};
     const taxPolicyAnswers: Record<string, number> = {};
     
-    // 解析问卷答案
     const parseAnswers = (src: unknown, target: Record<string, number>) => {
       if (src && typeof src === 'object') {
         Object.entries(src as Record<string, unknown>).forEach(([key, val]) => {
@@ -723,10 +735,11 @@ export async function POST(request: NextRequest) {
       }
     };
     
-    parseAnswers(questionnaire.invoiceAnswers, invoiceAnswers);
-    parseAnswers(questionnaire.revenueCostAnswers, revenueCostAnswers);
-    parseAnswers(questionnaire.publicPrivateAnswers, publicPrivateAnswers);
-    parseAnswers(questionnaire.taxPolicyAnswers, taxPolicyAnswers);
+    // 优先从顶层读，fallback到questionnaire子对象
+    parseAnswers(body.invoiceAnswers || questionnaire.invoiceAnswers, invoiceAnswers);
+    parseAnswers(body.revenueAnswers || body.revenueCostAnswers || questionnaire.revenueCostAnswers, revenueCostAnswers);
+    parseAnswers(body.publicPrivateAnswers || questionnaire.publicPrivateAnswers, publicPrivateAnswers);
+    parseAnswers(body.taxAnswers || body.taxPolicyAnswers || questionnaire.taxPolicyAnswers, taxPolicyAnswers);
     
     // 解析财务数据（使用前端实际字段名）
     let financialData: FinancialPeriod[] = [];
@@ -737,13 +750,13 @@ export async function POST(request: NextRequest) {
         revenue: getNumber(d.revenue),
         cost: getNumber(d.cost),
         profit: getNumber(d.profit),
-        vat: getNumber(d.vat),
-        cit: getNumber(d.cit),
+        vat: getNumber(d.vatPaid ?? d.vat),
+        cit: getNumber(d.incomeTaxPaid ?? d.cit),
         totalAssets: getNumber(d.totalAssets),
         totalLiabilities: getNumber(d.totalLiabilities),
-        accountsReceivable: getNumber(d.accountsReceivable),
+        accountsReceivable: getNumber(d.receivables ?? d.accountsReceivable),
         inventory: getNumber(d.inventory),
-        advanceReceived: getNumber(d.advanceReceived)
+        advanceReceived: getNumber(d.advanceReceipts ?? d.advanceReceived)
       }));
     }
     
