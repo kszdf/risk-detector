@@ -24,7 +24,7 @@ const INDUSTRY_BENCHMARKS: Record<string, {
   '其他': { grossMargin: { min: 20, max: 40 }, netMargin: { min: 5, max: 15 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } }
 };
 
-// ============== 问卷题目完整映射（带影响说明和后果）==============
+// ============== 问卷题目完整映射（带影响说明和后果）- 使用前端实际ID格式==============
 interface QuestionInfo {
   module: string;
   moduleName: string;
@@ -33,30 +33,29 @@ interface QuestionInfo {
 }
 
 const QUESTION_MAPPING: Record<string, QuestionInfo> = {
-  // 模块1：发票与资金流
-  '1.1': { module: 'invoice', moduleName: '发票与资金流', name: '四流不一致', consequence: '按偷税论处，补缴增值税+企业所得税，并处0.5-5倍罚款' },
-  '1.2': { module: 'invoice', moduleName: '发票与资金流', name: '私户收款未入账', consequence: '补缴增值税+所得税，0.5-5倍罚款' },
-  '1.3': { module: 'invoice', moduleName: '发票与资金流', name: '变名发票', consequence: '按虚开发票论处，补缴税款+罚款，情节严重可追究刑事责任' },
-  '1.4': { module: 'invoice', moduleName: '发票与资金流', name: '上游供应商异常', consequence: '进项转出+补缴增值税+罚款' },
-  '1.5': { module: 'invoice', moduleName: '发票与资金流', name: '红冲发票异常', consequence: '涉嫌虚开增值税发票，补缴税款+罚款' },
-  // 模块2：收入与成本
-  '2.1': { module: 'revenueCost', moduleName: '收入与成本', name: '延迟确认收入', consequence: '补缴增值税+所得税+滞纳金' },
-  '2.2': { module: 'revenueCost', moduleName: '收入与成本', name: '替票冲账', consequence: '费用调增+补缴企业所得税+罚款' },
-  '2.3': { module: 'revenueCost', moduleName: '收入与成本', name: '个人消费入公司账', consequence: '费用调增+补缴企业所得税+罚款' },
-  '2.4': { module: 'revenueCost', moduleName: '收入与成本', name: '存货账实不符', consequence: '涉嫌隐匿收入或虚增成本，补缴税款+罚款' },
-  '2.5': { module: 'revenueCost', moduleName: '收入与成本', name: '当期亏损异常', consequence: '需合理解释亏损原因，否则面临纳税调整' },
-  // 模块3：公私账户与股东
-  '3.1': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '股东借款超一年未还', consequence: '视同分红，需代扣代缴20%个人所得税' },
-  '3.2': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '利润分配不规范', consequence: '涉嫌逃避个人所得税，补缴+罚款' },
-  '3.3': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '关联方资金互转', consequence: '转让定价调整风险，需补缴税款+滞纳金' },
-  '3.4': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '大额现金交易', consequence: '资金链异常，触发税务稽查重点关注' },
-  '3.5': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '报销替代工资', consequence: '补缴个人所得税+社保，0.5-5倍罚款' },
-  // 模块4：税务申报与政策
-  '4.1': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '逾期申报/缴税', consequence: '按日加收万分之五滞纳金，并处0.5-5倍罚款' },
-  '4.2': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '小微优惠滥用', consequence: '补缴优惠减免税款+滞纳金+罚款' },
-  '4.3': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税收洼地空壳公司', consequence: '核定征收优惠被否定，补缴全部税款+滞纳金' },
-  '4.4': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税负率低于行业均值', consequence: '面临纳税评估，补缴+滞纳金+0.5-5倍罚款' },
-  '4.5': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '被稽查/纳税评估', consequence: '再次被稽查概率显著提高' }
+  // 模块1：发票与资金流 (inv1-inv5)
+  'inv1': { module: 'invoice', moduleName: '发票与资金流', name: '四流不一致', consequence: '按偷税论处，补缴增值税+企业所得税，并处0.5-5倍罚款' },
+  'inv2': { module: 'invoice', moduleName: '发票与资金流', name: '私户收款未入账', consequence: '补缴增值税+所得税，0.5-5倍罚款' },
+  'inv3': { module: 'invoice', moduleName: '发票与资金流', name: '变名发票', consequence: '按虚开发票论处，补缴税款+罚款，情节严重可追究刑事责任' },
+  'inv4': { module: 'invoice', moduleName: '发票与资金流', name: '上游供应商异常', consequence: '进项转出+补缴增值税+罚款' },
+  'inv5': { module: 'invoice', moduleName: '发票与资金流', name: '红冲发票异常', consequence: '涉嫌虚开增值税发票，补缴税款+罚款' },
+  // 模块2：收入与成本 (rev1-rev4)
+  'rev1': { module: 'revenueCost', moduleName: '收入与成本', name: '延迟确认收入', consequence: '补缴增值税+所得税+滞纳金' },
+  'rev2': { module: 'revenueCost', moduleName: '收入与成本', name: '替票冲账', consequence: '费用调增+补缴企业所得税+罚款' },
+  'rev3': { module: 'revenueCost', moduleName: '收入与成本', name: '个人消费入公司账', consequence: '费用调增+补缴企业所得税+罚款' },
+  'rev4': { module: 'revenueCost', moduleName: '收入与成本', name: '存货账实不符', consequence: '涉嫌隐匿收入或虚增成本，补缴税款+罚款' },
+  // 模块3：公私账户与股东 (pp1-pp5)
+  'pp1': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '股东借款超一年未还', consequence: '视同分红，需代扣代缴20%个人所得税' },
+  'pp2': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '利润分配不规范', consequence: '涉嫌逃避个人所得税，补缴+罚款' },
+  'pp3': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '关联方资金互转', consequence: '转让定价调整风险，需补缴税款+滞纳金' },
+  'pp4': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '大额现金交易', consequence: '资金链异常，触发税务稽查重点关注' },
+  'pp5': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '报销替代工资', consequence: '补缴个人所得税+社保，0.5-5倍罚款' },
+  // 模块4：税务申报与政策 (tax1-tax5)
+  'tax1': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '逾期申报/缴税', consequence: '按日加收万分之五滞纳金，并处0.5-5倍罚款' },
+  'tax2': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '小微优惠滥用', consequence: '补缴优惠减免税款+滞纳金+罚款' },
+  'tax3': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税收洼地空壳公司', consequence: '核定征收优惠被否定，补缴全部税款+滞纳金' },
+  'tax4': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税负率低于行业均值', consequence: '面临纳税评估，补缴+滞纳金+0.5-5倍罚款' },
+  'tax5': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '被稽查/纳税评估', consequence: '再次被稽查概率显著提高' }
 };
 
 // ============== 辅助函数 ==============
