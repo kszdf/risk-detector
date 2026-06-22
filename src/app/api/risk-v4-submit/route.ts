@@ -693,7 +693,7 @@ async function sendFeishuNotification(params: { riskId: string; companyName: str
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ receive_id: 'ou_087603bf00f651705ab95a1775b6b1a2', msg_type: 'interactive', content })
     });
-  } catch (e) { console.error('通知发送失败:', e); }
+  } catch (e) { /* 通知失败不影响主流程 */ }
 }
 
 // 主处理函数 = 
@@ -758,7 +758,7 @@ export async function POST(request: NextRequest) {
     const customerEmail = basicInfo.customerEmail || body.customerEmail || '';
     const period = body.period || detectionTime.split(' ')[0];
     
-    // ===== 高中低风险评分 =====
+    // 高中低风险评分
     
     // 1. 问卷风险项映射
     const allAnswers = { ...invoiceAnswers, ...revenueCostAnswers, ...publicPrivateAnswers, ...taxPolicyAnswers };
@@ -812,7 +812,7 @@ export async function POST(request: NextRequest) {
     // 8. 数据完整度
     const dataCompleteness = getDataCompleteness(financialData);
     
-    // ===== 构建飞书字段 =====
+    // 构建飞书字段
     const fields: Record<string, unknown> = {};
     
     // 基本信息
@@ -955,7 +955,6 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error) {
-    console.error('处理V4检测失败:', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : '服务器错误'
