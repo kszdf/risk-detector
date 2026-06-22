@@ -899,9 +899,7 @@ export async function POST(request: NextRequest) {
       lowRiskItems: lowRiskItems.map(i => i.name),
       crossValidation,
       trendWarnings,
-      industryBenchmarks: {
-        items: industryBenchmarks,
-      },
+      industryBenchmarks,
       trendData,
       dataCompleteness,
       reportStatus: '待审核'
