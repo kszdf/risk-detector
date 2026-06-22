@@ -653,14 +653,9 @@ function generateReportContent(params: {
 }
 
 // 飞书写入 = 
-async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> {
+async function writeToFeishu(fields: Record<string, unknown>): Promise<{success: boolean, error?: string, detail?: any}> {
   const token = await getFeishuToken();
-  if (!token) {
-    console.error('飞书写入失败: 无法获取token');
-    return false;
-  }
-  console.log('飞书token获取成功，准备写入...');
-  console.log('fields keys:', Object.keys(fields).join(','));
+  if (!token) return {success: false, error: 'token获取失败'};
   
   const response = await fetch(
     `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`,
@@ -672,13 +667,10 @@ async function writeToFeishu(fields: Record<string, unknown>): Promise<boolean> 
   );
   
   const result = await response.json();
-  console.log('飞书API响应:', JSON.stringify(result));
   if (!response.ok || result.code !== 0) {
-    console.error('飞书写入失败:', result);
-    return false;
+    return {success: false, error: `API返回code=${result.code}, msg=${result.msg}`, detail: result};
   }
-  console.log('飞书写入成功!');
-  return true;
+  return {success: true};
 }
 
 // 飞书消息通知
@@ -916,8 +908,8 @@ export async function POST(request: NextRequest) {
     });
     
     // 写入飞书并发送通知
-    const feishuSuccess = await writeToFeishu(fields);
-    if (feishuSuccess) {
+    const feishuResult = await writeToFeishu(fields);
+    if (feishuResult.success) {
       sendFeishuNotification({ riskId, companyName: String(fields['企业名称'] || ''), contactName: String(fields['联系人'] || ''), contactPhone: String(fields['联系电话'] || ''), industry: String(fields['所属行业'] || ''), riskLevel: overallLevel });
     }
     
@@ -933,6 +925,9 @@ export async function POST(request: NextRequest) {
         green: greenCount,
         total: totalItems
       },
+      feishuSaved: feishuResult.success,
+      feishuError: feishuResult.error,
+      feishuDetail: feishuResult.detail,
       highRiskItems: highRiskItems.map(i => ({
         name: i.name,
         source: i.source,
@@ -956,8 +951,7 @@ export async function POST(request: NextRequest) {
       },
       trendData,
       dataCompleteness,
-      reportStatus: '待审核',
-      feishuSaved: feishuSuccess
+      reportStatus: '待审核'
     });
     
   } catch (error) {
