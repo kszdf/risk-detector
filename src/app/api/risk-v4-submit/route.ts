@@ -90,13 +90,13 @@ interface FinancialPeriod {
   revenue: number;
   cost: number;
   profit: number;
-  vatPaid: number;
-  incomeTaxPaid: number;
-  totalAssets: number;
-  totalLiabilities: number;
-  receivables: number;
-  inventory: number;
-  advanceReceipts: number;
+  vat: number;           // 增值税
+  cit: number;           // 所得税（企业所得税）
+  totalAssets: number;  // 总资产
+  totalLiabilities: number; // 总负债
+  accountsReceivable: number; // 应收账款
+  inventory: number;    // 期末存货
+  advanceReceived: number; // 预收账款
 }
 
 // ============== 风险项结构 ==============
@@ -117,8 +117,9 @@ interface RiskItem {
 function calculateMetrics(data: FinancialPeriod) {
   const grossMargin = data.revenue > 0 ? ((data.revenue - data.cost) / data.revenue) * 100 : 0;
   const netMargin = data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0;
-  const vatRate = data.revenue > 0 ? (data.vatPaid / data.revenue) * 100 : 0;
-  const citRate = data.revenue > 0 ? (data.incomeTaxPaid / data.revenue) * 100 : 0;
+  // 使用正确字段名: vat 和 cit
+  const vatRate = data.revenue > 0 ? (data.vat / data.revenue) * 100 : 0;
+  const citRate = data.revenue > 0 ? (data.cit / data.revenue) * 100 : 0;
   const debtRatio = data.totalAssets > 0 ? (data.totalLiabilities / data.totalAssets) * 100 : 0;
   return { grossMargin, netMargin, vatRate, citRate, debtRatio };
 }
@@ -186,8 +187,8 @@ function calculateCrossValidation(
   const benchmarks = INDUSTRY_BENCHMARKS[industry] || INDUSTRY_BENCHMARKS['其他'];
   const revenue = latestData.revenue;
   
-  // 1. 延迟确认收入：预收/收入比
-  const advanceRatio = latestData.advanceReceipts / revenue;
+  // 1. 延迟确认收入：预收/收入比（使用 correct field name advanceReceived）
+  const advanceRatio = latestData.advanceReceived / revenue;
   if (advanceRatio <= 0.2) {
     // 正常，不记录
   } else if (advanceRatio <= 0.3) {
@@ -679,43 +680,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('收到V4检测数据:', JSON.stringify(body, null, 2));
     
-    // ============== DEBUG: 返回数据结构诊断 ==============
-    // 诊断字段名
-    const debug = {
-      // 问卷字段
-      hasInvoiceAnswers: !!body.invoiceAnswers,
-      invoiceAnswersType: Array.isArray(body.invoiceAnswers) ? 'array' : typeof body.invoiceAnswers,
-      invoiceAnswersSample: Array.isArray(body.invoiceAnswers) ? body.invoiceAnswers.slice(0, 3) : (typeof body.invoiceAnswers === 'object' ? Object.keys(body.invoiceAnswers || {}).slice(0, 3) : null),
-      
-      hasRevenueAnswers: !!body.revenueAnswers,
-      hasRevenueCostAnswers: !!body.revenueCostAnswers,
-      
-      hasTaxAnswers: !!body.taxAnswers,
-      hasTaxPolicyAnswers: !!body.taxPolicyAnswers,
-      
-      hasPublicPrivateAnswers: !!body.publicPrivateAnswers,
-      
-      // 财务数据字段
-      financialDataType: Array.isArray(body.financialData) ? 'array' : typeof body.financialData,
-      financialDataSample: Array.isArray(body.financialData) && body.financialData.length > 0 ? body.financialData[0] : null,
-      
-      // 前端发送的所有顶层key
-      topLevelKeys: Object.keys(body || {}),
-    };
-    
-    // 临时返回debug信息用于诊断
-    return Response.json({ 
-      success: true, 
-      debug,
-      message: 'DEBUG模式 - 数据结构诊断' 
-    });
-    // ============== DEBUG END ==============*/
-    
     // 生成ID和时间
     const riskId = generateRiskId();
     const detectionTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
     
-    // 解析问卷答案
+    // 问卷答案从 body.questionnaire 读取（不是 body）
+    const questionnaire = body.questionnaire || {};
+    
+    // 解析问卷答案（支持对象格式 {inv1: 3, inv2: 3, ...}）
     const invoiceAnswers: Record<string, number> = {};
     const revenueCostAnswers: Record<string, number> = {};
     const publicPrivateAnswers: Record<string, number> = {};
@@ -727,68 +699,51 @@ export async function POST(request: NextRequest) {
     const ppKeys = ['pp1', 'pp2', 'pp3', 'pp4', 'pp5'];
     const taxKeys = ['tax1', 'tax2', 'tax3', 'tax4', 'tax5'];
     
-    // 解析扁平格式（支持对象和数组格式）
-    if (body.invoiceAnswers && typeof body.invoiceAnswers === 'object') {
-      if (Array.isArray(body.invoiceAnswers)) {
-        // 数组格式 [3, 3, 2, 0, 0] 转换为 {inv1: 3, inv2: 3, ...}
-        invKeys.forEach((k, i) => { invoiceAnswers[k] = Number(body.invoiceAnswers[i]) || 0; });
-      } else {
-        Object.entries(body.invoiceAnswers).forEach(([key, val]) => {
-          invoiceAnswers[key] = Number(val) || 0;
-        });
-      }
-    }
-    if (body.revenueCostAnswers && typeof body.revenueCostAnswers === 'object') {
-      if (Array.isArray(body.revenueCostAnswers)) {
-        revKeys.forEach((k, i) => { revenueCostAnswers[k] = Number(body.revenueCostAnswers[i]) || 0; });
-      } else {
-        Object.entries(body.revenueCostAnswers).forEach(([key, val]) => {
-          revenueCostAnswers[key] = Number(val) || 0;
-        });
-      }
-    }
-    if (body.publicPrivateAnswers && typeof body.publicPrivateAnswers === 'object') {
-      if (Array.isArray(body.publicPrivateAnswers)) {
-        ppKeys.forEach((k, i) => { publicPrivateAnswers[k] = Number(body.publicPrivateAnswers[i]) || 0; });
-      } else {
-        Object.entries(body.publicPrivateAnswers).forEach(([key, val]) => {
-          publicPrivateAnswers[key] = Number(val) || 0;
-        });
-      }
-    }
-    if (body.taxPolicyAnswers && typeof body.taxPolicyAnswers === 'object') {
-      if (Array.isArray(body.taxPolicyAnswers)) {
-        taxKeys.forEach((k, i) => { taxPolicyAnswers[k] = Number(body.taxPolicyAnswers[i]) || 0; });
-      } else {
-        Object.entries(body.taxPolicyAnswers).forEach(([key, val]) => {
-          taxPolicyAnswers[key] = Number(val) || 0;
-        });
-      }
-    }
-    
-    // 补充解析questionnaire格式
-    if (body.questionnaire && typeof body.questionnaire === 'object') {
-      Object.entries(body.questionnaire).forEach(([key, val]: [string, unknown]) => {
-        const q = val as { score?: number; answer?: string };
-        let score = q.score ?? 0;
-        if (!score && typeof q.answer === 'string') {
-          if (q.answer.includes('从未') || q.answer.includes('否') || q.answer.includes('完全')) {
-            score = 0;
-          } else if (q.answer.includes('偶尔') || q.answer.includes('1次') || q.answer.includes('接近')) {
-            score = 2;
-          } else {
-            score = 3;
-          }
+    // 解析问卷答案（从 body.questionnaire 读取）
+    const parseAnswers = (src: unknown, target: Record<string, number>, keys: string[]) => {
+      if (src && typeof src === 'object') {
+        if (Array.isArray(src)) {
+          // 数组格式
+          keys.forEach((k, i) => { target[k] = Number((src as number[])[i]) || 0; });
+        } else {
+          // 对象格式 {inv1: 3, inv2: 3, ...}
+          Object.entries(src as Record<string, unknown>).forEach(([key, val]) => {
+            target[key] = Number(val) || 0;
+          });
         }
-        
-        if (key.startsWith('1.')) invoiceAnswers[key] = score;
-        else if (key.startsWith('2.')) revenueCostAnswers[key] = score;
-        else if (key.startsWith('3.')) publicPrivateAnswers[key] = score;
-        else if (key.startsWith('4.')) taxPolicyAnswers[key] = score;
+      }
+    };
+    
+    parseAnswers(questionnaire.invoiceAnswers, invoiceAnswers, invKeys);
+    parseAnswers(questionnaire.revenueCostAnswers, revenueCostAnswers, revKeys);
+    parseAnswers(questionnaire.publicPrivateAnswers, publicPrivateAnswers, ppKeys);
+    parseAnswers(questionnaire.taxPolicyAnswers, taxPolicyAnswers, taxKeys);
+    
+    // 补充解析兼容旧格式
+    if (questionnaire.invoiceAnswers && typeof questionnaire.invoiceAnswers === 'object' && !Array.isArray(questionnaire.invoiceAnswers)) {
+      Object.entries(questionnaire.invoiceAnswers).forEach(([key, val]) => {
+        if (!invoiceAnswers[key]) invoiceAnswers[key] = Number(val) || 0;
+      });
+    }
+    if (questionnaire.revenueCostAnswers && typeof questionnaire.revenueCostAnswers === 'object' && !Array.isArray(questionnaire.revenueCostAnswers)) {
+      Object.entries(questionnaire.revenueCostAnswers).forEach(([key, val]) => {
+        if (!revenueCostAnswers[key]) revenueCostAnswers[key] = Number(val) || 0;
+      });
+    }
+    if (questionnaire.publicPrivateAnswers && typeof questionnaire.publicPrivateAnswers === 'object' && !Array.isArray(questionnaire.publicPrivateAnswers)) {
+      Object.entries(questionnaire.publicPrivateAnswers).forEach(([key, val]) => {
+        if (!publicPrivateAnswers[key]) publicPrivateAnswers[key] = Number(val) || 0;
+      });
+    }
+    if (questionnaire.taxPolicyAnswers && typeof questionnaire.taxPolicyAnswers === 'object' && !Array.isArray(questionnaire.taxPolicyAnswers)) {
+      Object.entries(questionnaire.taxPolicyAnswers).forEach(([key, val]) => {
+        if (!taxPolicyAnswers[key]) taxPolicyAnswers[key] = Number(val) || 0;
       });
     }
     
-    // 解析财务数据
+    console.log('解析后问卷答案:', { invoiceAnswers, revenueCostAnswers, publicPrivateAnswers, taxPolicyAnswers });
+    
+    // 解析财务数据（使用前端实际字段名: vat, cit, accountsReceivable, advanceReceived）
     let financialData: FinancialPeriod[] = [];
     if (body.financialData && Array.isArray(body.financialData)) {
       financialData = body.financialData.map((d: Record<string, unknown>): FinancialPeriod => ({
@@ -797,19 +752,19 @@ export async function POST(request: NextRequest) {
         revenue: getNumber(d.revenue),
         cost: getNumber(d.cost),
         profit: getNumber(d.profit),
-        vatPaid: getNumber(d.vatPaid),
-        incomeTaxPaid: getNumber(d.incomeTaxPaid),
+        vat: getNumber(d.vat),                    // 增值税
+        cit: getNumber(d.cit),                    // 所得税
         totalAssets: getNumber(d.totalAssets),
-        totalLiabilities: getNumber(d.totalLiabilities || d.totalDebt),
-        receivables: getNumber(d.receivables || d.accountsReceivable),
+        totalLiabilities: getNumber(d.totalLiabilities),
+        accountsReceivable: getNumber(d.accountsReceivable), // 应收账款
         inventory: getNumber(d.inventory),
-        advanceReceipts: getNumber(d.advanceReceipts || d.advanceReceivable)
+        advanceReceived: getNumber(d.advanceReceived)  // 预收账款
       }));
     }
     
     console.log('financialData 解析后:', JSON.stringify(financialData));
-    console.log('latestData.vatPaid:', financialData[0]?.vatPaid, 'revenue:', financialData[0]?.revenue);
-    console.log('vatRate 计算:', financialData[0]?.revenue > 0 ? (financialData[0]?.vatPaid / financialData[0]?.revenue) * 100 : 0);
+    console.log('latestData.vat:', financialData[0]?.vat, 'revenue:', financialData[0]?.revenue);
+    console.log('vatRate 计算:', financialData[0]?.revenue > 0 ? (financialData[0]?.vat / financialData[0]?.revenue) * 100 : 0);
     
     // 获取基本信息
     const industry = body.industry || '';
@@ -901,12 +856,12 @@ export async function POST(request: NextRequest) {
     fields['营业收入(万元)'] = latestData?.revenue || 0;
     fields['营业成本(万元)'] = latestData?.cost || 0;
     fields['利润总额(万元)'] = latestData?.profit || 0;
-    fields['实缴增值税(万元)'] = latestData?.vatPaid || 0;
-    fields['实缴所得税(万元)'] = latestData?.incomeTaxPaid || 0;
+    fields['实缴增值税(万元)'] = latestData?.vat || 0;
+    fields['实缴所得税(万元)'] = latestData?.cit || 0;
     fields['总资产(万元)'] = latestData?.totalAssets || 0;
     fields['总负债(万元)'] = latestData?.totalLiabilities || 0;
-    fields['应收账款(万元)'] = latestData?.receivables || 0;
-    fields['预收账款(万元)'] = latestData?.advanceReceipts || 0;
+    fields['应收账款(万元)'] = latestData?.accountsReceivable || 0;
+    fields['预收账款(万元)'] = latestData?.advanceReceived || 0;
     
     // 财务指标
     fields['毛利率'] = latestMetrics?.grossMargin || 0;
