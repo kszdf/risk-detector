@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react'
 
 // ============ 类型定义 ============
@@ -242,6 +243,7 @@ export default function RiskV4Module() {
   const [riskId, setRiskId] = useState<string | null>(null)
   const [phoneError, setPhoneError] = useState('')
   const [creditCodeError, setCreditCodeError] = useState('')
+  const router = useRouter()
 
   useEffect(() => {
     setIsHydrated(true)
@@ -339,23 +341,14 @@ export default function RiskV4Module() {
     )
   }
 
-  // 提交成功页面
+  // 提交成功 - 立即跳转
   if (submitSuccess && riskId) {
+    router.push(`/report?riskId=${riskId}`)
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="text-center max-w-md">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle className="w-12 h-12 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">检测报告已生成</h2>
-          <p className="text-gray-600 mb-6">
-            正在跳转报告页面...
-          </p>
-          <div className="animate-pulse flex justify-center">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+        <div className="animate-pulse flex justify-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
-        <script dangerouslySetInnerHTML={{ __html: `setTimeout(() => { window.location.href = '/report?riskId=${riskId}'; }, 1500);` }} />
       </div>
     )
   }
