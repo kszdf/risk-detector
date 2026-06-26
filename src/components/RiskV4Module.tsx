@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Loader2, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react'
 
 // ============ 类型定义 ============
@@ -243,11 +242,16 @@ export default function RiskV4Module() {
   const [riskId, setRiskId] = useState<string | null>(null)
   const [phoneError, setPhoneError] = useState('')
   const [creditCodeError, setCreditCodeError] = useState('')
-  const router = useRouter()
 
   useEffect(() => {
     setIsHydrated(true)
   }, [])
+
+  useEffect(() => {
+    if (submitSuccess && riskId) {
+      window.location.href = `/report?riskId=${riskId}`
+    }
+  }, [submitSuccess, riskId])
 
   // 更新财务数据字段
   const updateFinancialField = (field: keyof FormData['financialData'], value: string) => {
@@ -341,9 +345,8 @@ export default function RiskV4Module() {
     )
   }
 
-  // 提交成功 - 立即跳转
+  // 提交成功 - 跳转中
   if (submitSuccess && riskId) {
-    router.push(`/report?riskId=${riskId}`)
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
         <div className="animate-pulse flex justify-center">
