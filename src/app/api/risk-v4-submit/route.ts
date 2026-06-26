@@ -359,7 +359,7 @@ function mapV5QuestionToRisk(key: string, answer: boolean): RiskItem | null {
     level,
     levelIcon,
     score: answer ? 1 : 0,
-    impact: answer ? '该问题存在税务风险，建议规范处理' : '该方面暂未发现明显违规',
+    impact: answer ? info.consequence : '该方面暂未发现明显违规',
     consequence: answer ? info.consequence : '',
     taxPolicy: answer ? info.taxPolicy : ''
   };
@@ -824,14 +824,14 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   const redCrossValidation = crossValidation.filter(c => c.level === 'high');
   const yellowCrossValidation = crossValidation.filter(c => c.level === 'medium');
 
-  // 综合计数
-  const redCount = highRiskItems.length + redCrossValidation.length;
-  const yellowCount = mediumRiskItems.length + yellowCrossValidation.length;
+  // 统计计数（仅问卷部分，不含交叉验证）
+  const redCount = highRiskItems.length;
+  const yellowCount = mediumRiskItems.length;
   const greenCount = lowRiskItems.length;
-  const totalItems = 20 + crossValidation.length;
+  const totalItems = 20;
 
-  // 综合风险等级判定
-  const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount, yellowCount);
+  // 综合风险等级判定（问卷+交叉验证合计）
+  const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount + redCrossValidation.length, yellowCount + yellowCrossValidation.length);
 
   // 行业基准对比
   const industryBenchmarks = calculateV5IndustryBenchmarks(financialData, industry);
