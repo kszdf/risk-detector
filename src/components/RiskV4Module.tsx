@@ -318,6 +318,19 @@ export default function RiskV4Module() {
       }
       
       if (data.riskId) {
+        // 将API返回数据+表单基本信息存入sessionStorage，供报告页直接读取
+        const cacheData = {
+          ...data,
+          _basicInfo: {
+            enterpriseName: formData.enterpriseName,
+            contactPerson: formData.contactPerson,
+            contactPhone: formData.contactPhone,
+            industry: formData.industry,
+            revenueScale: formData.revenueScale,
+            creditCode: formData.creditCode,
+          },
+        }
+        sessionStorage.setItem(`report_${data.riskId}`, JSON.stringify(cacheData))
         setRiskId(data.riskId)
         setSubmitSuccess(true)
       } else {

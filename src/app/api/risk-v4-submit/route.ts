@@ -354,7 +354,7 @@ function mapV5QuestionToRisk(key: string, answer: boolean): RiskItem | null {
 
   return {
     name: info.name,
-    source: `问卷q${key}`,
+    source: `问卷${key}`,
     module: info.module,
     moduleName: info.moduleName,
     level,
