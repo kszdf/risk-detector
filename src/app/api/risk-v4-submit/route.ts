@@ -867,7 +867,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
   fields['问卷明细'] = JSON.stringify(riskAnswers);
-  fields['财务数据'] = JSON.stringify(financialData);
+  fields['年度财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
 
   // 风险项明细（包含税收政策依据）
