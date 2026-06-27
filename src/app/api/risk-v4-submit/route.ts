@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { LLMClient, Config } from 'coze-coding-dev-sdk';
 
 export const runtime = 'nodejs';
 
@@ -360,7 +359,11 @@ function mapV5QuestionToRisk(key: string, answer: boolean): RiskItem | null {
     level,
     levelIcon,
     score: answer ? 1 : 0,
-    impact: answer ? info.consequence : '该方面暂未发现明显违规',
+    impact: answer
+      ? HIGH_RISK_QUESTIONS.includes(key)
+        ? `该问题存在较高税务风险，${info.consequence}`
+        : `该问题存在一定税务风险，${info.consequence}`
+      : '该方面暂未发现明显违规',
     consequence: answer ? info.consequence : '',
     taxPolicy: answer ? info.taxPolicy : ''
   };
@@ -690,7 +693,7 @@ function generateV5ReportContent(params: {
 }
 
 // 飞书写入
-async function writeToFeishu(fields: Record<string, unknown>): Promise<{ success: boolean; error?: string; detail?: unknown }> {
+async function writeToFeishu(fields: Record<string, unknown>): Promise<{ success: boolean; error?: string; detail?: any }> {
   const token = await getFeishuToken();
   if (!token) return { success: false, error: 'token获取失败' };
 
@@ -740,52 +743,7 @@ async function sendFeishuNotification(params: {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ receive_id: 'ou_087603bf00f651705ab95a1775b6b1a2', msg_type: 'interactive', content })
     });
-  } catch (e) { console.error('[Feishu Notification] 发送失败:', e instanceof Error ? e.message : e); /* 通知失败不影响主流程 */ }
-}
-
-// 工商信息LLM查询（提交时调用一次，结果存入报告）
-interface BusinessInfoResult {
-  legalPerson: string;
-  registeredCapital: string;
-  establishedDate: string;
-  companyType: string;
-  operatingStatus: string;
-  registeredAddress: string;
-  businessScope: string;
-  industry: string;
-  registrationAuthority: string;
-}
-
-async function fetchBusinessInfo(enterpriseName: string, creditCode: string): Promise<BusinessInfoResult | null> {
-  try {
-    const config = new Config();
-    const client = new LLMClient(config);
-    const prompt = `根据企业名称"${enterpriseName}"和统一社会信用代码"${creditCode}"，查询该企业的工商注册信息。请严格按以下JSON格式返回，不要添加任何其他内容：
-{"legalPerson":"法定代表人","registeredCapital":"注册资本(含单位)","establishedDate":"成立日期","companyType":"企业类型","operatingStatus":"经营状态","registeredAddress":"注册地址","businessScope":"经营范围(精简到100字内)","industry":"所属行业","registrationAuthority":"登记机关"}
-如果无法查到，请将各字段填"未查到"。只返回JSON，不要解释。`;
-    const res = await client.invoke([{ role: 'user', content: prompt }], {
-      model: 'doubao-seed-2-0-mini-260215',
-      temperature: 0.1,
-    });
-    const text = res.content || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    const data = JSON.parse(jsonMatch[0]);
-    return {
-      legalPerson: data.legalPerson || '未查到',
-      registeredCapital: data.registeredCapital || '未查到',
-      establishedDate: data.establishedDate || '未查到',
-      companyType: data.companyType || '未查到',
-      operatingStatus: data.operatingStatus || '未查到',
-      registeredAddress: data.registeredAddress || '未查到',
-      businessScope: data.businessScope || '未查到',
-      industry: data.industry || '未查到',
-      registrationAuthority: data.registrationAuthority || '未查到',
-    };
-  } catch (e) {
-    console.error('工商信息查询失败:', e);
-    return null;
-  }
+  } catch (e) { /* 通知失败不影响主流程 */ }
 }
 
 // 主处理函数
@@ -810,9 +768,6 @@ export async function POST(request: NextRequest) {
       result = await processLegacySubmission(body, riskId, detectionTime);
     }
 
-    // 添加报告审核状态
-    result.reportStatus = '待审核';
-
     return NextResponse.json(result);
 
   } catch (error) {
@@ -826,7 +781,7 @@ export async function POST(request: NextRequest) {
 // v5版本提交处理
 async function processV5Submission(body: Record<string, unknown>, riskId: string, detectionTime: string) {
   // 解析v5财务数据
-  const financialDataRaw = body.financialData as Record<string, unknown> | undefined;
+  const financialDataRaw = body.financialData as Record<string, unknown>;
   const financialData: V5FinancialData = {
     periodType: String(financialDataRaw?.periodType || 'quarterly'),
     periodValue: String(financialDataRaw?.periodValue || detectionTime.split(' ')[0]),
@@ -850,7 +805,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   const period = financialData.periodValue;
 
   // 解析20个判断题答案
-  const riskAnswersRaw = (body.riskAnswers as Record<string, unknown>) || {};
+  const riskAnswersRaw = body.riskAnswers as Record<string, unknown> || {};
   const riskAnswers: Record<string, boolean> = {};
   for (let i = 1; i <= 20; i++) {
     const key = `q${i}`;
@@ -864,23 +819,22 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     if (item) allRiskItems.push(item);
   });
 
+  // 问卷风险项（不含交叉验证）
   const highRiskItems = allRiskItems.filter(i => i.level === 'high');
   const mediumRiskItems = allRiskItems.filter(i => i.level === 'medium');
   const lowRiskItems = allRiskItems.filter(i => i.level === 'low');
 
-  // 交叉验证风险
+  // 交叉验证风险（独立展示，不计入概览统计）
   const crossValidation = calculateV5CrossValidation(financialData, industry);
-  const redCrossValidation = crossValidation.filter(c => c.level === 'high');
-  const yellowCrossValidation = crossValidation.filter(c => c.level === 'medium');
 
-  // 统计计数（仅问卷部分，不含交叉验证）
+  // 概览统计只算问卷风险项
   const redCount = highRiskItems.length;
   const yellowCount = mediumRiskItems.length;
   const greenCount = lowRiskItems.length;
-  const totalItems = 20;
+  const totalItems = 20 + crossValidation.length;
 
-  // 综合风险等级判定（问卷+交叉验证合计）
-  const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount + redCrossValidation.length, yellowCount + yellowCrossValidation.length);
+  // 综合风险等级判定
+  const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount, yellowCount);
 
   // 行业基准对比
   const industryBenchmarks = calculateV5IndustryBenchmarks(financialData, industry);
@@ -916,7 +870,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
   // 20个风险判断写入独立checkbox字段（支持飞书端人工审核修改）
-  const QUESTION_FIELD_MAP = {
+  const QUESTION_FIELD_MAP: Record<string, string> = {
     'q1': 'q1_逾期申报', 'q2': 'q2_连续零申报', 'q3': 'q3_增值税与所得税收入差异',
     'q4': 'q4_连续三年亏损', 'q5': 'q5_异常发票', 'q6': 'q6_发票经营范围不符',
     'q7': 'q7_变票入账', 'q8': 'q8_进销项不匹配', 'q9': 'q9_隐匿收入',
@@ -926,12 +880,12 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     'q19': 'q19_多层架构转移利润', 'q20': 'q20_非实际员工发工资'
   };
   for (const [qKey, fieldName] of Object.entries(QUESTION_FIELD_MAP)) {
-    const val = riskAnswersRaw[qKey];
+    const val = riskAnswers[qKey] as unknown;
     fields[fieldName] = val === true || val === 'true' || val === 1;
   }
-  fields['报告状态'] = '待审核';
+
   fields['问卷明细'] = JSON.stringify(riskAnswers);
-  fields['年度财务数据'] = JSON.stringify(financialData);
+  fields['财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
 
   // 风险项明细（包含税收政策依据）
@@ -962,24 +916,10 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     financialMetrics
   });
 
-  // 工商信息查询（提交时仅调用一次，存入报告内容）
-  const businessInfo = (enterpriseName || creditCode) 
-    ? await fetchBusinessInfo(enterpriseName, creditCode)
-    : null;
-
-  // 将工商信息注入报告内容JSON
-  if (businessInfo) {
-    try {
-      const reportObj = JSON.parse(fields['报告内容'] as string);
-      reportObj.businessInfo = businessInfo;
-      fields['报告内容'] = JSON.stringify(reportObj, null, 2);
-    } catch (_) { /* 忽略JSON解析失败 */ }
-  }
-
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    await sendFeishuNotification({
+    sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
@@ -1090,8 +1030,8 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   const debtRatio = latestData && latestData.totalAssets > 0 ? (latestData.totalLiabilities / latestData.totalAssets) * 100 : 0;
 
   // 简单判定
-  const redCount = highRiskItems.length;
-  const yellowCount = mediumRiskItems.length;
+  let redCount = highRiskItems.length;
+  let yellowCount = mediumRiskItems.length;
   const greenCount = lowRiskItems.length;
   const totalItems = 19;
 
@@ -1119,7 +1059,6 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   fields['高风险项数'] = redCount;
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
-  fields['报告状态'] = '待审核';
   fields['问卷明细'] = JSON.stringify(allAnswers);
   fields['风险项明细'] = [
     ...highRiskItems.map(i => `🔴${i.name}`),
@@ -1130,7 +1069,7 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    await sendFeishuNotification({
+    sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
