@@ -334,9 +334,21 @@ export async function GET(request: NextRequest) {
     const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
     const totalAssets = getNumber(fields['总资产(万元)']);
     const totalLiabilities = getNumber(fields['总负债(万元)']);
-    const periodRaw = extractFieldValue(fields['所属期']);
-    const detectionTimeRaw = extractFieldValue(fields['检测时间']);
-    const period = String(periodRaw || (detectionTimeRaw ? String(detectionTimeRaw).split(' ')[0] : '') || '');
+    let period = "";
+    const periodField = fields["所属期"];
+    if (Array.isArray(periodField) && periodField.length > 0) {
+      period = (periodField[0] as Record<string, unknown>)?.text ? String((periodField[0] as Record<string, unknown>).text) : String(periodField[0]);
+    } else if (typeof periodField === "string") {
+      period = periodField;
+    }
+    if (!period) {
+      const dtField = fields["检测时间"];
+      if (Array.isArray(dtField) && dtField.length > 0) {
+        period = ((dtField[0] as Record<string, unknown>)?.text ? String((dtField[0] as Record<string, unknown>).text) : String(dtField[0])).split(" ")[0];
+      } else if (typeof dtField === "string") {
+        period = dtField.split(" ")[0];
+      }
+    }
 
     // 6. 计算财务指标
     const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
