@@ -915,6 +915,15 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['高风险项数'] = redCount;
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
+  // 20个checkbox独立字段写入飞书
+  for (let i = 1; i <= 20; i++) {
+    const key = `q${i}`;
+    const info = V5_QUESTION_MAPPING[key];
+    if (info) {
+      fields[`${key}_${info.name}`] = Boolean(riskAnswers[key]);
+    }
+  }
+  fields['报告状态'] = '待审核';
   fields['问卷明细'] = JSON.stringify(riskAnswers);
   fields['年度财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
@@ -1104,6 +1113,7 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   fields['高风险项数'] = redCount;
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
+  fields['报告状态'] = '待审核';
   fields['问卷明细'] = JSON.stringify(allAnswers);
   fields['风险项明细'] = [
     ...highRiskItems.map(i => `🔴${i.name}`),
