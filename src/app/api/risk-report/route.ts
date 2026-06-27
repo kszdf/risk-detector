@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
-const BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
-const TABLE_ID = process.env.FEISHU_TABLE_ID || '';
+const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
+const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || '';
 
 // ===== 行业基准 =====
 const INDUSTRY_BENCHMARKS: Record<string, {
@@ -210,7 +210,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 1. 从飞书读取记录
-    const listUrl = `https://open.feishu.cn/open-apis/bitable/v1/apps/${BASE_TOKEN}/tables/${TABLE_ID}/records?page_size=1&filter=${encodeURIComponent(JSON.stringify({ conjunction: 'and', conditions: [{ field_name: '检测ID', operator: 'is', value: [riskId] }] }))}`;
+    const listUrl = `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records?page_size=1&filter=${encodeURIComponent(JSON.stringify({ conjunction: 'and', conditions: [{ field_name: '检测ID', operator: 'is', value: [riskId] }] }))}`;
     const listRes = await fetch(listUrl, { headers: { 'Authorization': `Bearer ${token}` } });
     const listData = await listRes.json();
 
