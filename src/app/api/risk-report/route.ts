@@ -279,12 +279,22 @@ export async function GET(request: NextRequest) {
     const mediumRiskItems: { name: string; source: string; module: string; impact: string; consequence: string; taxPolicy: string; level: string }[] = [];
     const lowRiskNames: string[] = [];
 
+    // 飞书checkbox字段名映射（与submit写入的QUESTION_FIELD_MAP一致）
+    const QUESTION_FIELD_MAP: Record<string, string> = {
+      'q1': 'q1_逾期申报', 'q2': 'q2_连续零申报', 'q3': 'q3_增值税与所得税收入差异',
+      'q4': 'q4_连续三年亏损', 'q5': 'q5_异常发票', 'q6': 'q6_发票经营范围不符',
+      'q7': 'q7_变票入账', 'q8': 'q8_进销项不匹配', 'q9': 'q9_隐匿收入',
+      'q10': 'q10_账外经营', 'q11': 'q11_利润虚高', 'q12': 'q12_库存账实不符',
+      'q13': 'q13_个人消费报销', 'q14': 'q14_股东往来款过大', 'q15': 'q15_利润临界值享受小微',
+      'q16': 'q16_三无费用', 'q17': 'q17_税收洼地核定', 'q18': 'q18_关联交易价格偏离',
+      'q19': 'q19_多层架构转移利润', 'q20': 'q20_非实际员工发工资'
+    };
+
     for (const key of questionKeys) {
       const info = V5_QUESTION_MAPPING[key];
       if (!info) continue;
 
-      // 飞书字段名格式：q1_逾期申报
-      const fieldName = `${key}_${info.name}`;
+      const fieldName = QUESTION_FIELD_MAP[key] || `${key}_${info.name}`;
       const answer = Boolean(fields[fieldName]);
 
       if (answer) {
@@ -324,7 +334,7 @@ export async function GET(request: NextRequest) {
     const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
     const totalAssets = getNumber(fields['总资产(万元)']);
     const totalLiabilities = getNumber(fields['总负债(万元)']);
-    const period = String(extractFieldValue(fields['检测期间']) || '');
+    const period = String(extractFieldValue(fields['所属期']) || '');
 
     // 6. 计算财务指标
     const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
