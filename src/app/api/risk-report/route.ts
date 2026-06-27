@@ -74,6 +74,25 @@ function getNumber(value: unknown): number {
   return 0;
 }
 
+function extractFieldValue(field: unknown): unknown {
+  if (field === null || field === undefined) return undefined;
+  if (typeof field === "string") return field;
+  if (typeof field === "number" || typeof field === "boolean") return field;
+  if (Array.isArray(field)) {
+    return field.map((item: unknown) => {
+      if (typeof item === "object" && item !== null && "text" in item) {
+        return (item as { text: string }).text;
+      }
+      return String(item);
+    }).join("");
+  }
+  if (typeof field === "object") {
+    const obj = field as Record<string, unknown>;
+    if ("text" in obj && typeof obj.text === "string") return obj.text;
+  }
+  return String(field);
+}
+
 async function getFeishuToken(): Promise<string | null> {
   const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
     method: 'POST',
@@ -241,16 +260,16 @@ export async function GET(request: NextRequest) {
     const fields: Record<string, any> = searchData.data.items[0].fields;
 
     // 2. 报告状态
-    const reportStatus = String(fields['报告状态'] || '待审核');
+    const reportStatus = String(extractFieldValue(fields['报告状态']) || '待审核');
 
     // 3. 构建basicInfo
     const basicInfo = {
-      enterpriseName: String(fields['企业名称'] || ''),
-      contactPerson: String(fields['联系人'] || ''),
-      contactPhone: String(fields['联系电话'] || ''),
-      industry: String(fields['所属行业'] || ''),
-      revenueScale: String(fields['年营收规模'] || ''),
-      creditCode: String(fields['统一信用代码'] || ''),
+      enterpriseName: String(extractFieldValue(fields['企业名称']) || ''),
+      contactPerson: String(extractFieldValue(fields['联系人']) || ''),
+      contactPhone: String(extractFieldValue(fields['联系电话']) || ''),
+      industry: String(extractFieldValue(fields['所属行业']) || ''),
+      revenueScale: String(extractFieldValue(fields['年营收规模']) || ''),
+      creditCode: String(extractFieldValue(fields['统一信用代码']) || ''),
     };
 
     // 4. 读取20个checkbox，构建riskItems
@@ -305,7 +324,7 @@ export async function GET(request: NextRequest) {
     const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
     const totalAssets = getNumber(fields['总资产(万元)']);
     const totalLiabilities = getNumber(fields['总负债(万元)']);
-    const period = String(fields['检测期间'] || '');
+    const period = String(extractFieldValue(fields['检测期间']) || '');
 
     // 6. 计算财务指标
     const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
@@ -316,7 +335,7 @@ export async function GET(request: NextRequest) {
 
     // 7. 交叉验证
     let crossValidation: CrossValidationItem[];
-    const existingCrossValidation = fields['交叉验证结果'];
+    const existingCrossValidation = extractFieldValue(fields['交叉验证结果']);
     if (existingCrossValidation && typeof existingCrossValidation === 'string') {
       try {
         crossValidation = JSON.parse(existingCrossValidation);
