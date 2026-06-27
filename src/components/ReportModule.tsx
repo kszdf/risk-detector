@@ -188,14 +188,14 @@ export default function ReportModule() {
           padding: '32px 40px',
           marginBottom: 24,
           boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
-          border: `3px solid ${THEME.gray[100]}`,
+          border: `1px solid ${THEME.gray[100]}`,
           animation: 'fadeIn 0.4s ease-out',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
             <div>
               <div style={{ fontSize: 13, color: THEME.gray[500], marginBottom: 8, letterSpacing: 1 }}>综合风险等级</div>
               <div style={{
-                fontSize: 42,
+                fontSize: 36,
                 fontWeight: 800,
                 color: riskLevel.includes('极') ? THEME.danger : riskLevel.includes('高') ? '#ea580c' : riskLevel.includes('中') ? THEME.warning : THEME.success,
                 lineHeight: 1.2,
@@ -420,7 +420,7 @@ export default function ReportModule() {
           padding: '24px 32px',
           background: '#fff',
           borderRadius: 12,
-          border: `3px solid ${THEME.gray[100]}`,
+          border: `1px solid ${THEME.gray[100]}`,
           boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
         }}>
           <div style={{ fontSize: 12, color: THEME.gray[400], lineHeight: 1.8, textAlign: 'center' }}>
@@ -456,7 +456,7 @@ function Card({ title, icon, titleColor, accent, subtitle, children }: {
       padding: '28px 32px',
       marginBottom: 24,
       boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
-      border: `3px solid ${THEME.gray[100]}`,
+      border: `1px solid ${THEME.gray[100]}`,
       animation: 'fadeIn 0.4s ease-out',
       borderLeft: accent ? `4px solid ${accent}` : undefined,
     }}>
@@ -574,5 +574,3 @@ function numCellStyle(value: number, min: number, max: number, invertWarning?: b
     color: isAbnormal ? THEME.danger : THEME.gray[700],
   }
 }
-
-// premium-ui-v1
