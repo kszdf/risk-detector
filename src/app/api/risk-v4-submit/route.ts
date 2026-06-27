@@ -915,13 +915,19 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['高风险项数'] = redCount;
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
-  // 20个checkbox独立字段写入飞书
-  for (let i = 1; i <= 20; i++) {
-    const key = `q${i}`;
-    const info = V5_QUESTION_MAPPING[key];
-    if (info) {
-      fields[`${key}_${info.name}`] = Boolean(riskAnswers[key]);
-    }
+  // 20个风险判断写入独立checkbox字段（支持飞书端人工审核修改）
+  const QUESTION_FIELD_MAP = {
+    'q1': 'q1_逾期申报', 'q2': 'q2_连续零申报', 'q3': 'q3_增值税与所得税收入差异',
+    'q4': 'q4_连续三年亏损', 'q5': 'q5_异常发票', 'q6': 'q6_发票经营范围不符',
+    'q7': 'q7_变票入账', 'q8': 'q8_进销项不匹配', 'q9': 'q9_隐匿收入',
+    'q10': 'q10_账外经营', 'q11': 'q11_利润虚高', 'q12': 'q12_库存账实不符',
+    'q13': 'q13_个人消费报销', 'q14': 'q14_股东往来款过大', 'q15': 'q15_利润临界值享受小微',
+    'q16': 'q16_三无费用', 'q17': 'q17_税收洼地核定', 'q18': 'q18_关联交易价格偏离',
+    'q19': 'q19_多层架构转移利润', 'q20': 'q20_非实际员工发工资'
+  };
+  for (const [qKey, fieldName] of Object.entries(QUESTION_FIELD_MAP)) {
+    const val = riskAnswersRaw[qKey];
+    fields[fieldName] = val === true || val === 'true' || val === 1;
   }
   fields['报告状态'] = '待审核';
   fields['问卷明细'] = JSON.stringify(riskAnswers);

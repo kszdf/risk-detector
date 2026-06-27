@@ -78,18 +78,26 @@ export default function ReportModule() {
           <div style={{ marginTop: 8, fontSize: 14, opacity: 0.9 }}>检测ID：{overview?.riskId || '-'} | 检测时间：{createdAt || '-'}</div>
         </div>
         {/* 审核状态提示 */}
-        {data.reportStatus && data.reportStatus !== '已审核' && (
+        {data.reportStatus === '待审核' && (
           <div style={{
-            padding: '10px 32px',
-            background: data.reportStatus === '待审核' ? '#fef3c7' : data.reportStatus === '已发送' ? '#d1fae5' : '#f3f4f6',
-            borderBottom: `1px solid ${C.border}`,
+            padding: '12px 32px',
+            background: '#fef3c7',
+            borderBottom: '1px solid #fde68a',
             display: 'flex', alignItems: 'center', gap: 8, fontSize: 14,
-            color: data.reportStatus === '待审核' ? '#92400e' : '#065f46',
+            color: '#92400e',
           }}>
-            {data.reportStatus === '待审核' && '⏳'}
-            {data.reportStatus === '已发送' && '✅'}
-            报告状态：{data.reportStatus}
-            {data.reportStatus === '待审核' && ' — 报告正在人工审核中，最终结果可能调整'}
+            ⏳ 本报告正在审核中，将由专业财税顾问确认后发送给您。当前内容为系统初步筛查结果。
+          </div>
+        )}
+        {data.reportStatus === '已发送' && (
+          <div style={{
+            padding: '12px 32px',
+            background: '#d1fae5',
+            borderBottom: '1px solid #a7f3d0',
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 14,
+            color: '#065f46',
+          }}>
+            ✅ 报告已审核并发送
           </div>
         )}
         <div style={{ padding: '24px 32px' }}>
