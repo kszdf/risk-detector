@@ -334,7 +334,9 @@ export async function GET(request: NextRequest) {
     const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
     const totalAssets = getNumber(fields['总资产(万元)']);
     const totalLiabilities = getNumber(fields['总负债(万元)']);
-    const period = String(extractFieldValue(fields['所属期']) || '');
+    const periodRaw = extractFieldValue(fields['所属期']);
+    const detectionTimeRaw = extractFieldValue(fields['检测时间']);
+    const period = String(periodRaw || (detectionTimeRaw ? String(detectionTimeRaw).split(' ')[0] : '') || '');
 
     // 6. 计算财务指标
     const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
