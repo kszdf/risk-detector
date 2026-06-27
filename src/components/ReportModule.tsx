@@ -69,6 +69,8 @@ const THEME = {
   }
 }
 
+// premium-ui-v1
+
 export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
