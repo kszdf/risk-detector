@@ -21,6 +21,18 @@ interface CrossValidationItem {
 interface BusinessInfo {
   enterpriseName?: string
   creditCode?: string
+  legalPerson?: string
+  registeredCapital?: string
+  establishedDate?: string
+  businessScope?: string
+  companyType?: string
+  registeredAddress?: string
+  operatingStatus?: string
+  approvalDate?: string
+  organizationCode?: string
+  taxpayerType?: string
+  industryCode?: string
+  registrationAuthority?: string
 }
 
 interface ReportData {
@@ -48,6 +60,8 @@ export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null)
+  const [bizLoading, setBizLoading] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -55,7 +69,23 @@ export default function ReportModule() {
     if (!riskId) { setError('缺少riskId参数'); setLoading(false); return }
     fetch(`/api/risk-report?riskId=${riskId}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => {
+        setData(d)
+        setLoading(false)
+        // 异步查询工商信息
+        const name = d.basicInfo?.enterpriseName || ''
+        const code = d.basicInfo?.creditCode || ''
+        if (name || code) {
+          setBizLoading(true)
+          fetch(`/api/business-info?enterpriseName=${encodeURIComponent(name)}&creditCode=${encodeURIComponent(code)}`)
+            .then(r2 => r2.json())
+            .then(bd => {
+              if (bd.success && bd.data) setBusinessInfo(bd.data)
+              setBizLoading(false)
+            })
+            .catch(() => setBizLoading(false))
+        }
+      })
       .catch(() => { setError('加载失败'); setLoading(false) })
   }, [])
 
@@ -103,36 +133,44 @@ export default function ReportModule() {
           </Section>
 
           {/* 工商信息 */}
-          {(data.businessInfo?.enterpriseName || data.businessInfo?.creditCode || basicInfo.enterpriseName || basicInfo.creditCode) && (
-            <Section title="🏢 工商信息">
-              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-                  {(data.businessInfo?.enterpriseName || basicInfo.enterpriseName) && (
-                    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>企业名称</div>
-                      <div style={{ fontWeight: 500 }}>{data.businessInfo?.enterpriseName || basicInfo.enterpriseName}</div>
-                    </div>
-                  )}
-                  {(data.businessInfo?.creditCode || basicInfo.creditCode) && (
-                    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
-                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>统一信用代码</div>
-                      <div style={{ fontWeight: 500, fontFamily: 'monospace' }}>{data.businessInfo?.creditCode || basicInfo.creditCode}</div>
-                    </div>
-                  )}
-                </div>
-                <a
-                  href={`https://www.gsxt.gov.cn/corpquery-search-info.html?keyword=${encodeURIComponent(data.businessInfo?.enterpriseName || basicInfo.enterpriseName || data.businessInfo?.creditCode || basicInfo.creditCode || '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none', transition: 'background 0.2s' }}
-                  onMouseOver={(e) => e.currentTarget.style.background = '#1d4ed8'}
-                  onMouseOut={(e) => e.currentTarget.style.background = '#2563eb'}
-                >
-                  🔍 查看国家企业信用信息公示系统
-                </a>
+          <Section title="🏢 工商信息">
+            {bizLoading ? (
+              <div style={{ textAlign: 'center', padding: 20, color: C.gray }}>
+                <div style={{ width: 24, height: 24, border: '3px solid #2563eb', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
+                正在查询工商信息...
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
               </div>
-            </Section>
-          )}
+            ) : businessInfo ? (
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  {businessInfo.enterpriseName && <BizField label="企业名称" value={businessInfo.enterpriseName} />}
+                  {businessInfo.creditCode && <BizField label="统一信用代码" value={businessInfo.creditCode} mono />}
+                  {businessInfo.legalPerson && <BizField label="法定代表人" value={businessInfo.legalPerson} />}
+                  {businessInfo.registeredCapital && <BizField label="注册资本" value={businessInfo.registeredCapital} />}
+                  {businessInfo.establishedDate && <BizField label="成立日期" value={businessInfo.establishedDate} />}
+                  {businessInfo.companyType && <BizField label="企业类型" value={businessInfo.companyType} />}
+                  {businessInfo.operatingStatus && <BizField label="经营状态" value={businessInfo.operatingStatus} />}
+                  {businessInfo.registeredAddress && <BizField label="注册地址" value={businessInfo.registeredAddress} />}
+                </div>
+                {businessInfo.businessScope && (
+                  <div style={{ marginTop: 12, padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>经营范围</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{businessInfo.businessScope}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 8, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+                  ℹ️ 以上信息由AI基于公开数据整理，仅供参考，以工商登记机关记录为准
+                </div>
+              </div>
+            ) : (basicInfo.enterpriseName || basicInfo.creditCode) ? (
+              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  {basicInfo.enterpriseName && <BizField label="企业名称" value={basicInfo.enterpriseName} />}
+                  {basicInfo.creditCode && <BizField label="统一信用代码" value={basicInfo.creditCode} mono />}
+                </div>
+              </div>
+            ) : null}
+          </Section>
 
           {/* 高风险清单 */}
           {reportContent && reportContent.highRiskItems?.length > 0 && (
@@ -331,6 +369,15 @@ function Item({ label, value }: { label: string; value: string }) {
     <div style={{ padding: 8, background: '#f9fafb', borderRadius: 6 }}>
       <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{label}</div>
       <div style={{ fontWeight: 500 }}>{value}</div>
+    </div>
+  )
+}
+
+function BizField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
+      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontWeight: 500, fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</div>
     </div>
   )
 }
