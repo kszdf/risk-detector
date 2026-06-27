@@ -563,3 +563,5 @@ function StatusBadge({ status }: { status: string }) {
   if (status === 'above') return <span style={{ background: '#fffbeb', color: '#92400e', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>⚡ 偏高</span>
   return <span style={{ background: '#ecfdf5', color: '#065f46', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>✅ 正常</span>
 }
+
+// VERSION_20260627_V2
