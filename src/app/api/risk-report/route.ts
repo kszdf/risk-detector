@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
-const BASE_TOKEN = 'NDJabSaqjaSj18sK1fRcHtZYnEd';
-const TABLE_ID = 'tblXBR8KBpNug17T';
+const BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
+const TABLE_ID = process.env.FEISHU_TABLE_ID || '';
 
 // ===== 行业基准 =====
 const INDUSTRY_BENCHMARKS: Record<string, {
