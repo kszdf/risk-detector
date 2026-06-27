@@ -6,6 +6,7 @@ interface RiskItem {
   source: string
   module: string
   impact: string
+  level?: string
   consequence?: string
   taxPolicy?: string
 }
@@ -21,18 +22,6 @@ interface CrossValidationItem {
 interface BusinessInfo {
   enterpriseName?: string
   creditCode?: string
-  legalPerson?: string
-  registeredCapital?: string
-  establishedDate?: string
-  businessScope?: string
-  companyType?: string
-  registeredAddress?: string
-  operatingStatus?: string
-  approvalDate?: string
-  organizationCode?: string
-  taxpayerType?: string
-  industryCode?: string
-  registrationAuthority?: string
 }
 
 interface ReportData {
@@ -49,13 +38,56 @@ interface ReportData {
     crossValidation: CrossValidationItem[]
     industryBenchmarks: { industry: string; items: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] } | null
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
-    businessInfo?: BusinessInfo
   } | null
   createdAt: string
   businessInfo?: BusinessInfo
 }
 
 const C = { red: '#ef4444', yellow: '#f59e0b', green: '#22c55e', blue: '#2563eb', gray: '#6b7280', bg: '#ffffff', text: '#1f2937', border: '#e5e7eb' }
+
+// 将提交API的返回格式转换为报告页需要的格式
+function transformSubmitResponse(submitData: any): ReportData {
+  const riskItems = (submitData.riskItems || []).map((i: any) => ({
+    name: i.name, source: i.source, module: i.module || '', moduleName: i.moduleName || '',
+    level: i.level, impact: i.impact, consequence: i.consequence || '', taxPolicy: i.taxPolicy || ''
+  }))
+  const highRiskItems = riskItems.filter((i: RiskItem) => i.level === '🔴')
+  const mediumRiskItems = riskItems.filter((i: RiskItem) => i.level === '🟡')
+  const lowRiskItems = riskItems.filter((i: RiskItem) => i.level === '🟢').map((i: RiskItem) => i.name)
+
+  return {
+    basicInfo: submitData._basicInfo || { enterpriseName: '', contactPerson: '', contactPhone: '', industry: '', revenueScale: '', creditCode: '' },
+    riskLevel: submitData.overallRiskLevel || '未知',
+    riskCounts: submitData.riskCounts || { red: 0, yellow: 0, green: 0 },
+    reportContent: {
+      overview: {
+        riskId: submitData.riskId || '',
+        period: submitData.financialMetrics?.period || '',
+        level: submitData.overallRiskLevel || '',
+        levelIcon: submitData.levelIcon || '',
+        redCount: submitData.riskCounts?.red || 0,
+        yellowCount: submitData.riskCounts?.yellow || 0,
+        greenCount: submitData.riskCounts?.green || 0,
+      },
+      highRiskItems,
+      mediumRiskItems,
+      lowRiskItems,
+      trendWarnings: [],
+      crossValidation: submitData.crossValidation || [],
+      industryBenchmarks: submitData.industryBenchmarks || null,
+      financialIndicators: submitData.financialMetrics ? [{
+        period: submitData.financialMetrics.period || '',
+        grossMargin: submitData.financialMetrics.grossMargin || 0,
+        vatRate: submitData.financialMetrics.vatRate || 0,
+        citRate: submitData.financialMetrics.citRate || 0,
+        netMargin: submitData.financialMetrics.netMargin || 0,
+        liabilityRatio: submitData.financialMetrics.debtRatio || 0,
+      }] : [],
+    },
+    createdAt: submitData.detectionTime || '',
+    businessInfo: submitData._basicInfo ? { enterpriseName: submitData._basicInfo.enterpriseName, creditCode: submitData._basicInfo.creditCode } : undefined,
+  }
+}
 
 export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
@@ -66,12 +98,24 @@ export default function ReportModule() {
     const params = new URLSearchParams(window.location.search)
     const riskId = params.get('riskId')
     if (!riskId) { setError('缺少riskId参数'); setLoading(false); return }
+
+    // 优先从 sessionStorage 读取（提交时缓存的数据）
+    try {
+      const cached = sessionStorage.getItem(`report_${riskId}`)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        // 将提交API的返回格式转换为报告页需要的格式
+        const reportData = transformSubmitResponse(parsed)
+        setData(reportData)
+        setLoading(false)
+        return
+      }
+    } catch (e) { /* 忽略，回退到API */ }
+
+    // 回退：从飞书API获取
     fetch(`/api/risk-report?riskId=${riskId}`)
       .then(r => r.json())
-      .then(d => {
-        setData(d)
-        setLoading(false)
-      })
+      .then(d => { setData(d); setLoading(false) })
       .catch(() => { setError('加载失败'); setLoading(false) })
   }, [])
 
@@ -119,39 +163,35 @@ export default function ReportModule() {
           </Section>
 
           {/* 工商信息 */}
-          {(reportContent?.businessInfo || basicInfo.enterpriseName || basicInfo.creditCode) && (
-          <Section title="🏢 工商信息">
-            {reportContent?.businessInfo ? (
+          {(data.businessInfo?.enterpriseName || data.businessInfo?.creditCode || basicInfo.enterpriseName || basicInfo.creditCode) && (
+            <Section title="🏢 工商信息">
               <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                  {reportContent.businessInfo.enterpriseName && <BizField label="企业名称" value={reportContent.businessInfo.enterpriseName} />}
-                  {reportContent.businessInfo.creditCode && <BizField label="统一信用代码" value={reportContent.businessInfo.creditCode} mono />}
-                  {reportContent.businessInfo.legalPerson && <BizField label="法定代表人" value={reportContent.businessInfo.legalPerson} />}
-                  {reportContent.businessInfo.registeredCapital && <BizField label="注册资本" value={reportContent.businessInfo.registeredCapital} />}
-                  {reportContent.businessInfo.establishedDate && <BizField label="成立日期" value={reportContent.businessInfo.establishedDate} />}
-                  {reportContent.businessInfo.companyType && <BizField label="企业类型" value={reportContent.businessInfo.companyType} />}
-                  {reportContent.businessInfo.operatingStatus && <BizField label="经营状态" value={reportContent.businessInfo.operatingStatus} />}
-                  {reportContent.businessInfo.registeredAddress && <BizField label="注册地址" value={reportContent.businessInfo.registeredAddress} />}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
+                  {(data.businessInfo?.enterpriseName || basicInfo.enterpriseName) && (
+                    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>企业名称</div>
+                      <div style={{ fontWeight: 500 }}>{data.businessInfo?.enterpriseName || basicInfo.enterpriseName}</div>
+                    </div>
+                  )}
+                  {(data.businessInfo?.creditCode || basicInfo.creditCode) && (
+                    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>统一信用代码</div>
+                      <div style={{ fontWeight: 500, fontFamily: 'monospace' }}>{data.businessInfo?.creditCode || basicInfo.creditCode}</div>
+                    </div>
+                  )}
                 </div>
-                {reportContent.businessInfo.businessScope && (
-                  <div style={{ marginTop: 12, padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>经营范围</div>
-                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{reportContent.businessInfo.businessScope}</div>
-                  </div>
-                )}
-                <div style={{ marginTop: 8, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
-                  ℹ️ 以上信息由AI基于公开数据整理，仅供参考，以工商登记机关记录为准
-                </div>
+                <a
+                  href={`https://www.gsxt.gov.cn/corpquery-search-info.html?keyword=${encodeURIComponent(data.businessInfo?.enterpriseName || basicInfo.enterpriseName || data.businessInfo?.creditCode || basicInfo.creditCode || '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, fontSize: 13, textDecoration: 'none', transition: 'background 0.2s' }}
+                  onMouseOver={(e) => e.currentTarget.style.background = '#1d4ed8'}
+                  onMouseOut={(e) => e.currentTarget.style.background = '#2563eb'}
+                >
+                  🔍 查看国家企业信用信息公示系统
+                </a>
               </div>
-            ) : (basicInfo.enterpriseName || basicInfo.creditCode) ? (
-              <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                  {basicInfo.enterpriseName && <BizField label="企业名称" value={basicInfo.enterpriseName} />}
-                  {basicInfo.creditCode && <BizField label="统一信用代码" value={basicInfo.creditCode} mono />}
-                </div>
-              </div>
-            ) : null}
-          </Section>
+            </Section>
           )}
 
           {/* 高风险清单 */}
@@ -351,15 +391,6 @@ function Item({ label, value }: { label: string; value: string }) {
     <div style={{ padding: 8, background: '#f9fafb', borderRadius: 6 }}>
       <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{label}</div>
       <div style={{ fontWeight: 500 }}>{value}</div>
-    </div>
-  )
-}
-
-function BizField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div style={{ padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
-      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontWeight: 500, fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</div>
     </div>
   )
 }
