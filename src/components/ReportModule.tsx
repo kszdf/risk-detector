@@ -69,8 +69,6 @@ const THEME = {
   }
 }
 
-// premium-ui-v1
-
 export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -576,3 +574,5 @@ function numCellStyle(value: number, min: number, max: number, invertWarning?: b
     color: isAbnormal ? THEME.danger : THEME.gray[700],
   }
 }
+
+// premium-ui-v1
