@@ -209,16 +209,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '获取飞书Token失败' }, { status: 500 });
     }
 
-    // 1. 从飞书读取记录
-    const listUrl = `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records?page_size=1&filter=${encodeURIComponent(JSON.stringify({ conjunction: 'and', conditions: [{ field_name: '检测ID', operator: 'is', value: [riskId] }] }))}`;
-    const listRes = await fetch(listUrl, { headers: { 'Authorization': `Bearer ${token}` } });
-    const listData = await listRes.json();
+    // 1. 从飞书读取记录（使用 POST search API）
+    const searchRes = await fetch(
+      `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records/search`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          filter: {
+            conjunction: "and",
+            conditions: [
+              {
+                field_name: "检测ID",
+                operator: "is",
+                value: [riskId],
+              },
+            ],
+          },
+        }),
+      }
+    );
+    const searchData = await searchRes.json();
 
-    if (!listData.data?.items?.length) {
+    if (!searchData.data?.items?.length) {
       return NextResponse.json({ error: '未找到该检测记录' }, { status: 404 });
     }
 
-    const fields: Record<string, any> = listData.data.items[0].fields;
+    const fields: Record<string, any> = searchData.data.items[0].fields;
 
     // 2. 报告状态
     const reportStatus = String(fields['报告状态'] || '待审核');
