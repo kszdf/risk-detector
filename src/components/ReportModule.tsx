@@ -26,7 +26,7 @@ interface BusinessInfo {
 
 interface ReportData {
   error?: string
-  basicInfo: { enterpriseName: string; contactPerson: string; contactPhone: string; industry: string; revenueScale: string; creditCode: string }
+  basicInfo: { enterpriseName: string; contactPerson: string; contactPhone: string; industry: string; revenueScale: string; creditCode: string; period?: string }
   riskLevel: string
   riskCounts: { red: number; yellow: number; green: number }
   reportContent: {
@@ -110,6 +110,7 @@ export default function ReportModule() {
               <Item label="所属行业" value={basicInfo.industry || '-'} />
               <Item label="年营收规模" value={basicInfo.revenueScale || '-'} />
               <Item label="统一信用代码" value={basicInfo.creditCode || '-'} />
+              <Item label="所属期" value={basicInfo.period || '-'} />
             </Grid>
           </Section>
 

@@ -262,7 +262,24 @@ export async function GET(request: NextRequest) {
     // 2. 报告状态
     const reportStatus = String(extractFieldValue(fields['报告状态']) || '待审核');
 
-    // 3. 构建basicInfo
+    // 3. 提取所属期
+    let period = "";
+    const periodField = fields["所属期"];
+    if (Array.isArray(periodField) && periodField.length > 0) {
+      period = (periodField[0] as Record<string, unknown>)?.text ? String((periodField[0] as Record<string, unknown>).text) : String(periodField[0]);
+    } else if (typeof periodField === "string") {
+      period = periodField;
+    }
+    if (!period) {
+      const dtField = fields["检测时间"];
+      if (Array.isArray(dtField) && dtField.length > 0) {
+        period = ((dtField[0] as Record<string, unknown>)?.text ? String((dtField[0] as Record<string, unknown>).text) : String(dtField[0])).split(" ")[0];
+      } else if (typeof dtField === "string") {
+        period = dtField.split(" ")[0];
+      }
+    }
+
+    // 4. 构建basicInfo
     const basicInfo = {
       enterpriseName: String(extractFieldValue(fields['企业名称']) || ''),
       contactPerson: String(extractFieldValue(fields['联系人']) || ''),
@@ -270,6 +287,7 @@ export async function GET(request: NextRequest) {
       industry: String(extractFieldValue(fields['所属行业']) || ''),
       revenueScale: String(extractFieldValue(fields['年营收规模']) || ''),
       creditCode: String(extractFieldValue(fields['统一信用代码']) || ''),
+      period,
     };
 
     // 4. 读取20个checkbox，构建riskItems
@@ -334,21 +352,6 @@ export async function GET(request: NextRequest) {
     const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
     const totalAssets = getNumber(fields['总资产(万元)']);
     const totalLiabilities = getNumber(fields['总负债(万元)']);
-    let period = "";
-    const periodField = fields["所属期"];
-    if (Array.isArray(periodField) && periodField.length > 0) {
-      period = (periodField[0] as Record<string, unknown>)?.text ? String((periodField[0] as Record<string, unknown>).text) : String(periodField[0]);
-    } else if (typeof periodField === "string") {
-      period = periodField;
-    }
-    if (!period) {
-      const dtField = fields["检测时间"];
-      if (Array.isArray(dtField) && dtField.length > 0) {
-        period = ((dtField[0] as Record<string, unknown>)?.text ? String((dtField[0] as Record<string, unknown>).text) : String(dtField[0])).split(" ")[0];
-      } else if (typeof dtField === "string") {
-        period = dtField.split(" ")[0];
-      }
-    }
 
     // 6. 计算财务指标
     const grossMargin = revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0;
