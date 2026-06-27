@@ -739,7 +739,7 @@ async function sendFeishuNotification(params: {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ receive_id: 'ou_087603bf00f651705ab95a1775b6b1a2', msg_type: 'interactive', content })
     });
-  } catch (_e) { /* 通知失败不影响主流程 */ }
+  } catch (e) { console.error('[Feishu Notification] 发送失败:', e instanceof Error ? e.message : e); /* 通知失败不影响主流程 */ }
 }
 
 // 主处理函数
@@ -901,7 +901,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    sendFeishuNotification({
+    await sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
@@ -1051,7 +1051,7 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    sendFeishuNotification({
+    await sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
