@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LLMClient, Config } from 'coze-coding-dev-sdk';
 
 export const runtime = 'nodejs';
 
@@ -742,6 +743,51 @@ async function sendFeishuNotification(params: {
   } catch (e) { console.error('[Feishu Notification] 发送失败:', e instanceof Error ? e.message : e); /* 通知失败不影响主流程 */ }
 }
 
+// 工商信息LLM查询（提交时调用一次，结果存入报告）
+interface BusinessInfoResult {
+  legalPerson: string;
+  registeredCapital: string;
+  establishedDate: string;
+  companyType: string;
+  operatingStatus: string;
+  registeredAddress: string;
+  businessScope: string;
+  industry: string;
+  registrationAuthority: string;
+}
+
+async function fetchBusinessInfo(enterpriseName: string, creditCode: string): Promise<BusinessInfoResult | null> {
+  try {
+    const config = new Config();
+    const client = new LLMClient(config);
+    const prompt = `根据企业名称"${enterpriseName}"和统一社会信用代码"${creditCode}"，查询该企业的工商注册信息。请严格按以下JSON格式返回，不要添加任何其他内容：
+{"legalPerson":"法定代表人","registeredCapital":"注册资本(含单位)","establishedDate":"成立日期","companyType":"企业类型","operatingStatus":"经营状态","registeredAddress":"注册地址","businessScope":"经营范围(精简到100字内)","industry":"所属行业","registrationAuthority":"登记机关"}
+如果无法查到，请将各字段填"未查到"。只返回JSON，不要解释。`;
+    const res = await client.invoke([{ role: 'user', content: prompt }], {
+      model: 'doubao-seed-2-0-mini-260215',
+      temperature: 0.1,
+    });
+    const text = res.content || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const data = JSON.parse(jsonMatch[0]);
+    return {
+      legalPerson: data.legalPerson || '未查到',
+      registeredCapital: data.registeredCapital || '未查到',
+      establishedDate: data.establishedDate || '未查到',
+      companyType: data.companyType || '未查到',
+      operatingStatus: data.operatingStatus || '未查到',
+      registeredAddress: data.registeredAddress || '未查到',
+      businessScope: data.businessScope || '未查到',
+      industry: data.industry || '未查到',
+      registrationAuthority: data.registrationAuthority || '未查到',
+    };
+  } catch (e) {
+    console.error('工商信息查询失败:', e);
+    return null;
+  }
+}
+
 // 主处理函数
 export async function POST(request: NextRequest) {
   try {
@@ -897,6 +943,20 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     industryBenchmarks,
     financialMetrics
   });
+
+  // 工商信息查询（提交时仅调用一次，存入报告内容）
+  const businessInfo = (enterpriseName || creditCode) 
+    ? await fetchBusinessInfo(enterpriseName, creditCode)
+    : null;
+
+  // 将工商信息注入报告内容JSON
+  if (businessInfo) {
+    try {
+      const reportObj = JSON.parse(fields['报告内容'] as string);
+      reportObj.businessInfo = businessInfo;
+      fields['报告内容'] = JSON.stringify(reportObj, null, 2);
+    } catch (_) { /* 忽略JSON解析失败 */ }
+  }
 
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);

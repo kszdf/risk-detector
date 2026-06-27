@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     ];
 
     const response = await client.invoke(messages as any, {
-      model: 'doubao-seed-2-0-pro-260215',
+      model: 'doubao-seed-2-0-mini-260215',
       temperature: 0.1,
     });
 

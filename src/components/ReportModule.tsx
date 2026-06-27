@@ -49,6 +49,7 @@ interface ReportData {
     crossValidation: CrossValidationItem[]
     industryBenchmarks: { industry: string; items: { name: string; unit: string; benchmarkMin: number; benchmarkMax: number; actual: number; status: string }[] } | null
     financialIndicators: { period: string; vatRate: number; citRate: number; grossMargin: number; netMargin: number; liabilityRatio: number }[]
+    businessInfo?: BusinessInfo
   } | null
   createdAt: string
   businessInfo?: BusinessInfo
@@ -60,8 +61,6 @@ export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [businessInfo, setBusinessInfo] = useState<BusinessInfo | null>(null)
-  const [bizLoading, setBizLoading] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -72,19 +71,6 @@ export default function ReportModule() {
       .then(d => {
         setData(d)
         setLoading(false)
-        // 异步查询工商信息
-        const name = d.basicInfo?.enterpriseName || ''
-        const code = d.basicInfo?.creditCode || ''
-        if (name || code) {
-          setBizLoading(true)
-          fetch(`/api/business-info?enterpriseName=${encodeURIComponent(name)}&creditCode=${encodeURIComponent(code)}`)
-            .then(r2 => r2.json())
-            .then(bd => {
-              if (bd.success && bd.data) setBusinessInfo(bd.data)
-              setBizLoading(false)
-            })
-            .catch(() => setBizLoading(false))
-        }
       })
       .catch(() => { setError('加载失败'); setLoading(false) })
   }, [])
@@ -133,29 +119,24 @@ export default function ReportModule() {
           </Section>
 
           {/* 工商信息 */}
+          {(reportContent?.businessInfo || basicInfo.enterpriseName || basicInfo.creditCode) && (
           <Section title="🏢 工商信息">
-            {bizLoading ? (
-              <div style={{ textAlign: 'center', padding: 20, color: C.gray }}>
-                <div style={{ width: 24, height: 24, border: '3px solid #2563eb', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 8px' }} />
-                正在查询工商信息...
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              </div>
-            ) : businessInfo ? (
+            {reportContent?.businessInfo ? (
               <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                  {businessInfo.enterpriseName && <BizField label="企业名称" value={businessInfo.enterpriseName} />}
-                  {businessInfo.creditCode && <BizField label="统一信用代码" value={businessInfo.creditCode} mono />}
-                  {businessInfo.legalPerson && <BizField label="法定代表人" value={businessInfo.legalPerson} />}
-                  {businessInfo.registeredCapital && <BizField label="注册资本" value={businessInfo.registeredCapital} />}
-                  {businessInfo.establishedDate && <BizField label="成立日期" value={businessInfo.establishedDate} />}
-                  {businessInfo.companyType && <BizField label="企业类型" value={businessInfo.companyType} />}
-                  {businessInfo.operatingStatus && <BizField label="经营状态" value={businessInfo.operatingStatus} />}
-                  {businessInfo.registeredAddress && <BizField label="注册地址" value={businessInfo.registeredAddress} />}
+                  {reportContent.businessInfo.enterpriseName && <BizField label="企业名称" value={reportContent.businessInfo.enterpriseName} />}
+                  {reportContent.businessInfo.creditCode && <BizField label="统一信用代码" value={reportContent.businessInfo.creditCode} mono />}
+                  {reportContent.businessInfo.legalPerson && <BizField label="法定代表人" value={reportContent.businessInfo.legalPerson} />}
+                  {reportContent.businessInfo.registeredCapital && <BizField label="注册资本" value={reportContent.businessInfo.registeredCapital} />}
+                  {reportContent.businessInfo.establishedDate && <BizField label="成立日期" value={reportContent.businessInfo.establishedDate} />}
+                  {reportContent.businessInfo.companyType && <BizField label="企业类型" value={reportContent.businessInfo.companyType} />}
+                  {reportContent.businessInfo.operatingStatus && <BizField label="经营状态" value={reportContent.businessInfo.operatingStatus} />}
+                  {reportContent.businessInfo.registeredAddress && <BizField label="注册地址" value={reportContent.businessInfo.registeredAddress} />}
                 </div>
-                {businessInfo.businessScope && (
+                {reportContent.businessInfo.businessScope && (
                   <div style={{ marginTop: 12, padding: '8px 12px', background: '#fff', borderRadius: 6 }}>
                     <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>经营范围</div>
-                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{businessInfo.businessScope}</div>
+                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{reportContent.businessInfo.businessScope}</div>
                   </div>
                 )}
                 <div style={{ marginTop: 8, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
@@ -171,6 +152,7 @@ export default function ReportModule() {
               </div>
             ) : null}
           </Section>
+          )}
 
           {/* 高风险清单 */}
           {reportContent && reportContent.highRiskItems?.length > 0 && (
