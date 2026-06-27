@@ -810,6 +810,9 @@ export async function POST(request: NextRequest) {
       result = await processLegacySubmission(body, riskId, detectionTime);
     }
 
+    // 添加报告审核状态
+    result.reportStatus = '待审核';
+
     return NextResponse.json(result);
 
   } catch (error) {

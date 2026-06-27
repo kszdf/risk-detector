@@ -41,53 +41,10 @@ interface ReportData {
   } | null
   createdAt: string
   businessInfo?: BusinessInfo
+  reportStatus?: string
 }
 
 const C = { red: '#ef4444', yellow: '#f59e0b', green: '#22c55e', blue: '#2563eb', gray: '#6b7280', bg: '#ffffff', text: '#1f2937', border: '#e5e7eb' }
-
-// 将提交API的返回格式转换为报告页需要的格式
-function transformSubmitResponse(submitData: any): ReportData {
-  const riskItems = (submitData.riskItems || []).map((i: any) => ({
-    name: i.name, source: i.source, module: i.module || '', moduleName: i.moduleName || '',
-    level: i.level, impact: i.impact, consequence: i.consequence || '', taxPolicy: i.taxPolicy || ''
-  }))
-  const highRiskItems = riskItems.filter((i: RiskItem) => i.level === '🔴')
-  const mediumRiskItems = riskItems.filter((i: RiskItem) => i.level === '🟡')
-  const lowRiskItems = riskItems.filter((i: RiskItem) => i.level === '🟢').map((i: RiskItem) => i.name)
-
-  return {
-    basicInfo: submitData._basicInfo || { enterpriseName: '', contactPerson: '', contactPhone: '', industry: '', revenueScale: '', creditCode: '' },
-    riskLevel: submitData.overallRiskLevel || '未知',
-    riskCounts: submitData.riskCounts || { red: 0, yellow: 0, green: 0 },
-    reportContent: {
-      overview: {
-        riskId: submitData.riskId || '',
-        period: submitData.financialMetrics?.period || '',
-        level: submitData.overallRiskLevel || '',
-        levelIcon: submitData.levelIcon || '',
-        redCount: submitData.riskCounts?.red || 0,
-        yellowCount: submitData.riskCounts?.yellow || 0,
-        greenCount: submitData.riskCounts?.green || 0,
-      },
-      highRiskItems,
-      mediumRiskItems,
-      lowRiskItems,
-      trendWarnings: [],
-      crossValidation: submitData.crossValidation || [],
-      industryBenchmarks: submitData.industryBenchmarks || null,
-      financialIndicators: submitData.financialMetrics ? [{
-        period: submitData.financialMetrics.period || '',
-        grossMargin: submitData.financialMetrics.grossMargin || 0,
-        vatRate: submitData.financialMetrics.vatRate || 0,
-        citRate: submitData.financialMetrics.citRate || 0,
-        netMargin: submitData.financialMetrics.netMargin || 0,
-        liabilityRatio: submitData.financialMetrics.debtRatio || 0,
-      }] : [],
-    },
-    createdAt: submitData.detectionTime || '',
-    businessInfo: submitData._basicInfo ? { enterpriseName: submitData._basicInfo.enterpriseName, creditCode: submitData._basicInfo.creditCode } : undefined,
-  }
-}
 
 export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
@@ -99,20 +56,6 @@ export default function ReportModule() {
     const riskId = params.get('riskId')
     if (!riskId) { setError('缺少riskId参数'); setLoading(false); return }
 
-    // 优先从 sessionStorage 读取（提交时缓存的数据）
-    try {
-      const cached = sessionStorage.getItem(`report_${riskId}`)
-      if (cached) {
-        const parsed = JSON.parse(cached)
-        // 将提交API的返回格式转换为报告页需要的格式
-        const reportData = transformSubmitResponse(parsed)
-        setData(reportData)
-        setLoading(false)
-        return
-      }
-    } catch (e) { /* 忽略，回退到API */ }
-
-    // 回退：从飞书API获取
     fetch(`/api/risk-report?riskId=${riskId}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
@@ -134,6 +77,21 @@ export default function ReportModule() {
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>企业财税合规风险筛查报告</h1>
           <div style={{ marginTop: 8, fontSize: 14, opacity: 0.9 }}>检测ID：{overview?.riskId || '-'} | 检测时间：{createdAt || '-'}</div>
         </div>
+        {/* 审核状态提示 */}
+        {data.reportStatus && data.reportStatus !== '已审核' && (
+          <div style={{
+            padding: '10px 32px',
+            background: data.reportStatus === '待审核' ? '#fef3c7' : data.reportStatus === '已发送' ? '#d1fae5' : '#f3f4f6',
+            borderBottom: `1px solid ${C.border}`,
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 14,
+            color: data.reportStatus === '待审核' ? '#92400e' : '#065f46',
+          }}>
+            {data.reportStatus === '待审核' && '⏳'}
+            {data.reportStatus === '已发送' && '✅'}
+            报告状态：{data.reportStatus}
+            {data.reportStatus === '待审核' && ' — 报告正在人工审核中，最终结果可能调整'}
+          </div>
+        )}
         <div style={{ padding: '24px 32px' }}>
           {/* 基本信息 */}
           <Section title="基本信息">
