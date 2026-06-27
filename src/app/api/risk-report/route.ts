@@ -279,12 +279,12 @@ export async function GET(request: NextRequest) {
     const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount, yellowCount);
 
     // 5. 读取财务指标
-    const revenue = getNumber(fields['营业收入']);
-    const cost = getNumber(fields['营业成本']);
-    const vatPaid = getNumber(fields['实缴增值税']);
-    const incomeTaxPaid = getNumber(fields['实缴所得税']);
-    const totalAssets = getNumber(fields['总资产']);
-    const totalLiabilities = getNumber(fields['总负债']);
+    const revenue = getNumber(fields['营业收入(万元)']);
+    const cost = getNumber(fields['营业成本(万元)']);
+    const vatPaid = getNumber(fields['实缴增值税(万元)']);
+    const incomeTaxPaid = getNumber(fields['实缴所得税(万元)']);
+    const totalAssets = getNumber(fields['总资产(万元)']);
+    const totalLiabilities = getNumber(fields['总负债(万元)']);
     const period = String(fields['检测期间'] || '');
 
     // 6. 计算财务指标

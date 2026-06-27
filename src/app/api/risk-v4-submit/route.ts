@@ -857,10 +857,10 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['实缴所得税(万元)'] = financialData.incomeTaxPaid;
   fields['总资产(万元)'] = financialData.totalAssets;
   fields['总负债(万元)'] = financialData.totalLiabilities;
-  fields['毛利率'] = financialMetrics.grossMargin;
-  fields['增值税税负率'] = financialMetrics.vatRate;
-  fields['所得税贡献率'] = financialMetrics.citRate;
-  fields['资产负债率'] = financialMetrics.debtRatio;
+  fields['毛利率(%)'] = financialMetrics.grossMargin;
+  fields['增值税税负率(%)'] = financialMetrics.vatRate;
+  fields['所得税贡献率(%)'] = financialMetrics.citRate;
+  fields['资产负债率(%)'] = financialMetrics.debtRatio;
   fields['检测ID'] = riskId;
   fields['检测时间'] = detectionTime;
   fields['报告状态'] = '待审核';
@@ -901,7 +901,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     : '暂无明显矛盾';
 
   // 报告内容（v5版本JSON结构）
-  fields['报告内容'] = generateV5ReportContent({
+  fields['报告内容JSON'] = generateV5ReportContent({
     riskId,
     period,
     overallLevel,
@@ -1047,10 +1047,10 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   fields['所属期'] = period;
   fields['年营收规模'] = revenueScale;
   fields['营业收入(万元)'] = latestData?.revenue || 0;
-  fields['毛利率'] = grossMargin;
-  fields['增值税税负率'] = vatRate;
-  fields['所得税贡献率'] = citRate;
-  fields['资产负债率'] = debtRatio;
+  fields['毛利率(%)'] = grossMargin;
+  fields['增值税税负率(%)'] = vatRate;
+  fields['所得税贡献率(%)'] = citRate;
+  fields['资产负债率(%)'] = debtRatio;
   fields['检测ID'] = riskId;
   fields['检测时间'] = detectionTime;
   fields['报告状态'] = '待审核';
