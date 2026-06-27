@@ -23,33 +23,18 @@ interface BusinessInfo {
   creditCode?: string
 }
 
-interface CompanyRiskSummary {
-  executedCount: number
-  dishonestCount: number
-  abnormalOperationCount: number
-  hasRisk: boolean
-}
-
-interface CompanyInfoData {
-  available: boolean
-  found: boolean
-  companyName?: string
-  creditCode?: string
-  legalPerson?: string
-  registeredCapital?: string
-  establishDate?: string
-  businessStatus?: string
-  companyType?: string
-  registeredAddress?: string
-  businessScope?: string
-  industry?: string
-  operationPeriod?: string
-  registrationAuthority?: string
-  riskSummary?: CompanyRiskSummary
-  detailUrl?: string
-  gsxtUrl?: string
-  message?: string
-  error?: string
+interface CreditCodeAnalysis {
+  valid: boolean
+  reason?: string
+  deptName?: string
+  categoryName?: string
+  fullType?: string
+  regionCode?: string
+  regionName?: string
+  orgCode?: string
+  checkDigit?: string
+  expectedCheck?: string
+  checksumMismatch?: boolean
 }
 
 interface ReportData {
@@ -106,12 +91,85 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid #e2e8f0',
 }
 
+// ============ 统一社会信用代码解析 ============
+const DEPT_CODES: Record<string, string> = {
+  '1': '机构编制机关', '5': '民政部门', '9': '工商部门',
+  'Y': '市场监管部门', 'A': '司法行政部门', 'N': '农业农村部门',
+}
+const CATEGORY_MAP: Record<string, Record<string, string>> = {
+  '1': { '1': '机关', '2': '事业单位', '3': '群众团体', '9': '其他' },
+  '5': { '1': '社会团体', '2': '民办非企业单位', '3': '基金会', '9': '其他' },
+  '9': { '1': '企业', '2': '个体工商户', '3': '农民专业合作社', '9': '其他' },
+  'Y': { '1': '企业', '2': '个体工商户', '3': '农民专业合作社', '9': '其他' },
+  'A': { '1': '律师执业机构', '2': '公证机构', '9': '其他' },
+  'N': { '1': '事业单位', '2': '社会团体', '9': '其他' },
+}
+const REGION_MAP: Record<string, string> = {
+  '110000': '北京市', '110100': '北京市', '120000': '天津市',
+  '310000': '上海市', '310100': '上海市', '500000': '重庆市',
+  '320000': '江苏省', '320100': '南京市', '320200': '无锡市', '320300': '徐州市',
+  '320400': '常州市', '320500': '苏州市', '320600': '南通市', '320700': '连云港市',
+  '320800': '淮安市', '320900': '盐城市', '321000': '扬州市', '321100': '镇江市',
+  '321200': '泰州市', '321300': '宿迁市',
+  '330000': '浙江省', '330100': '杭州市', '330200': '宁波市', '330300': '温州市',
+  '330400': '嘉兴市', '330500': '湖州市', '330600': '绍兴市',
+  '440000': '广东省', '440100': '广州市', '440300': '深圳市', '440400': '珠海市',
+  '440600': '佛山市', '441300': '惠州市', '441900': '东莞市',
+  '370000': '山东省', '370100': '济南市', '370200': '青岛市',
+  '510000': '四川省', '510100': '成都市', '420000': '湖北省', '420100': '武汉市',
+  '430000': '湖南省', '430100': '长沙市', '130000': '河北省', '130100': '石家庄市',
+  '410000': '河南省', '410100': '郑州市', '350000': '福建省', '350100': '福州市',
+  '350200': '厦门市', '340000': '安徽省', '340100': '合肥市',
+  '210000': '辽宁省', '210100': '沈阳市', '210200': '大连市',
+  '610000': '陕西省', '610100': '西安市',
+}
+
+function parseCreditCode(code: string): CreditCodeAnalysis {
+  code = (code || '').trim().toUpperCase()
+  if (code.length !== 18) {
+    return { valid: false, reason: `编码长度为${code.length}位（标准应为18位）` }
+  }
+  const dept = code[0]
+  const category = code[1]
+  const regionCode = code.substring(2, 8)
+  const orgCode = code.substring(8, 17)
+  const checkDigit = code[17]
+  const deptName = DEPT_CODES[dept] || `未知部门(${dept})`
+  const categoryMap = CATEGORY_MAP[dept] || {}
+  const categoryName = categoryMap[category] || `未知类别(${category})`
+  const regionName = REGION_MAP[regionCode] || `行政区划${regionCode}`
+
+  // 校验码验证（GB 32100-2015）
+  const charset = '0123456789ABCDEFGHJKLMNPQRTUWXY'
+  const weights = [1, 3, 9, 27, 19, 26, 16, 17, 20, 29, 25, 13, 8, 24, 10, 30, 28]
+  let sum = 0
+  for (let i = 0; i < 17; i++) {
+    const idx = charset.indexOf(code[i])
+    if (idx === -1) return { valid: false, reason: `第${i + 1}位"${code[i]}"不在合法字符集中` }
+    sum += idx * weights[i]
+  }
+  const expectedCheck = charset[(31 - (sum % 31)) % 31]
+  const checksumValid = expectedCheck === checkDigit
+
+  return {
+    valid: checksumValid,
+    checksumMismatch: !checksumValid,
+    deptName,
+    categoryName,
+    fullType: `${deptName} · ${categoryName}`,
+    regionCode,
+    regionName,
+    orgCode,
+    checkDigit,
+    expectedCheck,
+  }
+}
+
 export default function ReportModule() {
   const [data, setData] = useState<ReportData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfoData | null>(null)
-  const [companyInfoLoading, setCompanyInfoLoading] = useState(false)
+
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -124,21 +182,6 @@ export default function ReportModule() {
         if (d.error) { setError(d.error); setLoading(false); return }
         setData(d)
         setLoading(false)
-        // 报告加载完成后，自动查询工商信息
-        const name = d.basicInfo?.enterpriseName || ''
-        const code = d.basicInfo?.creditCode || ''
-        if (name || code) {
-          setCompanyInfoLoading(true)
-          fetch(`/api/company-info?name=${encodeURIComponent(name)}&creditCode=${encodeURIComponent(code)}`)
-            .then(r => r.json())
-            .then(info => {
-              if (!info.error || info.available) {
-                setCompanyInfo(info)
-              }
-              setCompanyInfoLoading(false)
-            })
-            .catch(() => setCompanyInfoLoading(false))
-        }
       })
       .catch(() => { setError('加载失败'); setLoading(false) })
   }, [])
@@ -287,141 +330,54 @@ export default function ReportModule() {
           </div>
         </Section>
 
-        {/* 工商信息 */}
-        <Section title="工商信息" icon="🏢" accent="#2563eb">
-          {companyInfoLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', color: THEME.gray[500] }}>
-              <div style={{ width: 20, height: 20, border: '2px solid ' + THEME.gray[200], borderTopColor: THEME.accent, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: 14 }}>正在查询企业工商信息...</span>
-            </div>
-          ) : companyInfo?.found ? (
-            <div>
-              {/* 经营状态标签 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' as const }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600,
-                  background: companyInfo.businessStatus === '存续' || companyInfo.businessStatus === '在业' ? '#ecfdf5' : '#fef2f2',
-                  color: companyInfo.businessStatus === '存续' || companyInfo.businessStatus === '在业' ? '#065f46' : '#991b1b',
-                  border: '1px solid ' + (companyInfo.businessStatus === '存续' || companyInfo.businessStatus === '在业' ? '#a7f3d0' : '#fecaca'),
-                }}>
-                  {companyInfo.businessStatus === '存续' || companyInfo.businessStatus === '在业' ? '✅' : '⚠️'}
-                  {companyInfo.businessStatus || '未知状态'}
-                </span>
-                {companyInfo.riskSummary && (
+        {/* 工商登记信息 */}
+        {(() => {
+          const code = basicInfo.creditCode || ''
+          const analysis = code ? parseCreditCode(code) : null
+          const isValidCode = analysis?.valid !== false && code.length === 18
+          return (
+            <Section title="工商登记信息" icon="🏢" accent="#2563eb">
+              {/* 基本信息网格 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: isValidCode ? 16 : 0 }}>
+                <InfoCell label="企业全称" value={basicInfo.enterpriseName || '-'} />
+                <InfoCell label="统一社会信用代码" value={code || '-'} mono />
+                {analysis && isValidCode && (
                   <>
-                    {companyInfo.riskSummary.dishonestCount > 0 && (
-                      <span style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
-                        🔴 失信记录 {companyInfo.riskSummary.dishonestCount}条
-                      </span>
-                    )}
-                    {companyInfo.riskSummary.executedCount > 0 && (
-                      <span style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
-                        🟡 被执行记录 {companyInfo.riskSummary.executedCount}条
-                      </span>
-                    )}
-                    {companyInfo.riskSummary.abnormalOperationCount > 0 && (
-                      <span style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
-                        ⚠️ 经营异常 {companyInfo.riskSummary.abnormalOperationCount}次
-                      </span>
-                    )}
-                    {!companyInfo.riskSummary.hasRisk && (
-                      <span style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
-                        ✅ 暂无司法风险记录
-                      </span>
-                    )}
+                    <InfoCell label="登记管理部门" value={analysis.deptName || '-'} />
+                    <InfoCell label="机构类型" value={analysis.categoryName || '-'} />
+                    <InfoCell label="登记机关所在地" value={analysis.regionName || '-'} />
+                    <InfoCell label="组织机构代码" value={analysis.orgCode || '-'} mono />
                   </>
                 )}
+                <InfoCell label="所属行业" value={basicInfo.industry || '-'} />
+                <InfoCell label="年营收规模" value={basicInfo.revenueScale || '-'} />
+                <InfoCell label="所属期" value={displayPeriod} />
               </div>
 
-              {/* 工商信息详情网格 */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                <InfoCell label="企业全称" value={companyInfo.companyName || '-'} />
-                <InfoCell label="统一社会信用代码" value={companyInfo.creditCode || '-'} mono />
-                <InfoCell label="法定代表人" value={companyInfo.legalPerson || '-'} />
-                <InfoCell label="注册资本" value={companyInfo.registeredCapital || '-'} />
-                <InfoCell label="成立日期" value={companyInfo.establishDate || '-'} />
-                <InfoCell label="企业类型" value={companyInfo.companyType || '-'} />
-                <InfoCell label="所属行业" value={companyInfo.industry || '-'} />
-                <InfoCell label="登记机关" value={companyInfo.registrationAuthority || '-'} />
-              </div>
-
-              {/* 注册地址 */}
-              {companyInfo.registeredAddress && (
-                <div style={{ marginTop: 12, padding: '12px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' as const }}>注册地址</div>
-                  <div style={{ fontSize: 14, color: '#1e293b' }}>{companyInfo.registeredAddress}</div>
+              {/* 信用代码校验结果 */}
+              {analysis && (
+                <div style={{
+                  marginTop: 12, padding: '12px 16px', borderRadius: 10,
+                  background: analysis.valid ? '#ecfdf5' : '#fef2f2',
+                  border: '1px solid ' + (analysis.valid ? '#a7f3d0' : '#fecaca'),
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: analysis.valid ? '#065f46' : '#991b1b', marginBottom: 4 }}>
+                    {analysis.valid ? '✅ 统一社会信用代码校验通过' : '⚠️ 统一社会信用代码校验异常'}
+                  </div>
+                  <div style={{ fontSize: 12, color: analysis.valid ? '#047857' : '#b91c1c', lineHeight: 1.6 }}>
+                    {analysis.valid
+                      ? `校验码 ${analysis.checkDigit} 符合 GB 32100-2015 标准`
+                      : `期望校验码为 ${analysis.expectedCheck}，实际为 ${analysis.checkDigit}${analysis.reason ? '；' + analysis.reason : ''}`}
+                  </div>
                 </div>
               )}
 
-              {/* 经营范围 */}
-              {companyInfo.businessScope && (
-                <div style={{ marginTop: 12, padding: '12px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' as const }}>经营范围</div>
-                  <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.7, maxHeight: 100, overflowY: 'auto' as const }}>{companyInfo.businessScope}</div>
-                </div>
-              )}
-
-              {/* 数据来源链接 */}
-              <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' as const }}>
-                {companyInfo.detailUrl && (
-                  <a
-                    href={companyInfo.detailUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                      background: '#eff6ff', color: '#1e40af', textDecoration: 'none',
-                      border: '1px solid #bfdbfe',
-                    }}
-                  >
-                    🔍 风鸟企业详情
-                  </a>
-                )}
-                <a
-                  href={`https://www.gsxt.gov.cn/corpquery-search-info.html?keyword=${encodeURIComponent(companyInfo.companyName || basicInfo.enterpriseName || '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                    background: '#f0fdf4', color: '#166534', textDecoration: 'none',
-                    border: '1px solid #bbf7d0',
-                  }}
-                >
-                  🏛️ 国家企业信用信息公示系统
-                </a>
+              <div style={{ marginTop: 12, fontSize: 11, color: THEME.gray[400] }}>
+                数据来源：企业自主申报（基于统一社会信用代码 GB 32100-2015 标准解析）
               </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: THEME.gray[400] }}>
-                数据来源：风鸟企业查询 · 仅供参考，以官方公示为准
-              </div>
-            </div>
-          ) : (
-            /* 工商信息查询失败或未配置时的降级展示 */
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-                <InfoCell label="企业名称" value={basicInfo.enterpriseName} />
-                <InfoCell label="统一信用代码" value={basicInfo.creditCode} mono />
-              </div>
-              <a
-                href={`https://www.gsxt.gov.cn/corpquery-search-info.html?keyword=${encodeURIComponent(basicInfo.enterpriseName || basicInfo.creditCode || '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  padding: '10px 20px',
-                  background: 'linear-gradient(135deg, #2563eb, #3b82f6)',
-                  color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                  textDecoration: 'none',
-                  boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
-                }}
-              >
-                🔍 在国家企信系统查询完整工商信息
-              </a>
-            </div>
-          )}
-        </Section>
+            </Section>
+          )
+        })()}
 
         {/* 高风险清单 */}
         {reportContent && reportContent.highRiskItems && reportContent.highRiskItems.length > 0 && (
