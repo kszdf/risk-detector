@@ -1,7 +1,5 @@
 'use server';
 
-import { NextRequest, NextResponse } from 'next/server';
-
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
