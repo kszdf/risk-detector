@@ -281,23 +281,33 @@ export async function submitRiskAssessment(formData: any) {
     
     // 写入飞书多维表
     const fields: Record<string, any> = {
-      '风险ID': riskId,
+      '检测ID': riskId,
       '企业名称': enterpriseName,
-      '信用代码': creditCode,
+      '统一信用代码': creditCode,
       '联系人': contactPerson,
       '联系电话': contactPhone,
-      '行业': industry,
-      '营收规模': revenueScale,
-      '高风险数量': highCount,
-      '中风险数量': mediumCount,
-      '低风险数量': lowCount,
+      '所属行业': industry,
+      '年营收规模': revenueScale,
+      '高风险项数': highCount,
+      '中风险项数': mediumCount,
+      '低风险项数': lowCount,
       '报告内容JSON': JSON.stringify(reportContent),
       '提交时间': now.toISOString(),
     };
     
-    // 写入风险答案
+    // 写入风险答案（通过 QUESTION_FIELD_MAP 映射飞书字段名）
+    const QUESTION_FIELD_MAP: Record<string, string> = {
+      'q1': 'q1_逾期申报', 'q2': 'q2_连续零申报', 'q3': 'q3_增值税与所得税收入差异',
+      'q4': 'q4_连续三年亏损', 'q5': 'q5_异常发票', 'q6': 'q6_发票经营范围不符',
+      'q7': 'q7_变票入账', 'q8': 'q8_进销项不匹配', 'q9': 'q9_隐匿收入',
+      'q10': 'q10_账外经营', 'q11': 'q11_利润虚高', 'q12': 'q12_库存账实不符',
+      'q13': 'q13_个人消费报销', 'q14': 'q14_股东往来款过大', 'q15': 'q15_利润临界值享受小微',
+      'q16': 'q16_三无费用', 'q17': 'q17_税收洼地核定', 'q18': 'q18_关联交易价格偏离',
+      'q19': 'q19_多层架构转移利润', 'q20': 'q20_非实际员工发工资'
+    };
     for (const qKey of questionKeys) {
-      fields[qKey] = Number(riskAnswers[qKey]) || 0;
+      const fieldName = QUESTION_FIELD_MAP[qKey] || qKey;
+      fields[fieldName] = Number(riskAnswers[qKey]) || 0;
     }
     
     const feishuRes = await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`, {
