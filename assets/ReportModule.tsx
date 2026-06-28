@@ -176,6 +176,55 @@ export default function ReportModule() {
     const riskId = params.get('riskId')
     if (!riskId) { setError('缺少riskId参数'); setLoading(false); return }
 
+    const cached = sessionStorage.getItem('report_' + riskId)
+    if (cached) {
+      try {
+        const cacheData = JSON.parse(cached)
+        const transformed: ReportData = {
+          basicInfo: {
+            enterpriseName: cacheData._basicInfo?.enterpriseName || cacheData.enterpriseName || '',
+            creditCode: cacheData._basicInfo?.creditCode || cacheData.creditCode || '',
+            contactPerson: cacheData._basicInfo?.contactPerson || '',
+            contactPhone: cacheData._basicInfo?.contactPhone || '',
+            industry: cacheData._basicInfo?.industry || '',
+            revenueScale: cacheData._basicInfo?.revenueScale || '',
+          },
+          riskLevel: cacheData.summary?.high > 0 ? '高风险' : cacheData.summary?.medium > 0 ? '中风险' : '低风险',
+          riskCounts: {
+            red: cacheData.summary?.high || 0,
+            yellow: cacheData.summary?.medium || 0,
+            green: cacheData.summary?.low || 0,
+          },
+          reportContent: {
+            overview: {
+              riskId: cacheData.riskId || riskId,
+              period: new Date().toISOString().split('T')[0],
+              level: cacheData.summary?.high > 0 ? '高风险' : cacheData.summary?.medium > 0 ? '中风险' : '低风险',
+              levelIcon: cacheData.summary?.high > 0 ? '🔴' : cacheData.summary?.medium > 0 ? '🟡' : '🟢',
+              redCount: cacheData.summary?.high || 0,
+              yellowCount: cacheData.summary?.medium || 0,
+              greenCount: cacheData.summary?.low || 0,
+            },
+            highRiskItems: (cacheData.riskItems || []).filter((r: any) => r.level === 'high').map((r: any) => ({
+              name: r.title, source: r.module, module: r.module, impact: r.impact, consequence: r.consequence, taxPolicy: r.taxPolicy,
+            })),
+            mediumRiskItems: (cacheData.riskItems || []).filter((r: any) => r.level === 'medium').map((r: any) => ({
+              name: r.title, source: r.module, module: r.module, impact: r.impact, consequence: r.consequence, taxPolicy: r.taxPolicy,
+            })),
+            lowRiskItems: (cacheData.riskItems || []).filter((r: any) => r.level === 'low').map((r: any) => r.title),
+            trendWarnings: [],
+            crossValidation: [],
+            industryBenchmarks: null,
+            financialIndicators: [],
+          },
+          createdAt: new Date().toISOString(),
+        }
+        setData(transformed)
+        setLoading(false)
+        return
+      } catch (e) { /* 缓存解析失败，走API */ }
+    }
+
     fetch('/api/risk-report?riskId=' + riskId)
       .then(r => r.json())
       .then(d => {

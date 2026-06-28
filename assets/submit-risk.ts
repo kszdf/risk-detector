@@ -307,7 +307,8 @@ export async function submitRiskAssessment(formData: any) {
     };
     for (const qKey of questionKeys) {
       const fieldName = QUESTION_FIELD_MAP[qKey] || qKey;
-      fields[fieldName] = Number(riskAnswers[qKey]) || 0;
+      const numVal = Number(riskAnswers[qKey]) || 0;
+      fields[fieldName] = numVal > 0;
     }
     
     const feishuRes = await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`, {
@@ -321,6 +322,10 @@ export async function submitRiskAssessment(formData: any) {
     
     const feishuData = await feishuRes.json();
     const feishuSaved = feishuData.code === 0;
+    if (!feishuSaved) {
+      console.error('飞书写入失败:', JSON.stringify(feishuData));
+      return { error: '数据保存失败(code:' + feishuData.code + ')，请重试' };
+    }
     
     return {
       riskId,
