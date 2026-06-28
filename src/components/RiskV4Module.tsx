@@ -1,7 +1,48 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react'
-import { submitRiskAssessment } from '@/actions/submit-risk'
+// ============ 风险后果定义 ============
+const RISK_CONSEQUENCES: Record<string, { title: string; consequence: string; taxPolicy: string; module: string }> = {
+  q1: { title: "逾期申报", module: "taxCompliance", consequence: "逾期申报定额罚款2000元以下；逾期缴纳按日加收万分之五滞纳金", taxPolicy: "《税收征收管理法》第六十二条、第六十三条" },
+  q2: { title: "隐瞒收入", module: "taxCompliance", consequence: "按偷税处理，补缴税款+滞纳金+0.5-5倍罚款，情节严重追究刑事责任", taxPolicy: "《税收征收管理法》第六十三条" },
+  q3: { title: "虚列成本", module: "taxCompliance", consequence: "调增应纳税所得额，补缴企业所得税+滞纳金，涉嫌偷税的处0.5-5倍罚款", taxPolicy: "《税收征收管理法》第六十三条、《企业所得税法》第八条" },
+  q4: { title: "连续亏损", module: "taxCompliance", consequence: "列入纳税评估重点对象，税务机关怀疑隐匿收入或转移利润", taxPolicy: "《税收征收管理法》第三十五条、《企业所得税法》第四十七条" },
+  q5: { title: "异常发票", module: "invoiceRisk", consequence: "善意取得可免予处罚但需补税；恶意取得按偷税处理，0.5-5倍罚款+追究刑责", taxPolicy: "《发票管理办法》第二十一条" },
+  q6: { title: "发票经营范围不符", module: "invoiceRisk", consequence: "虚开增值税专用发票的依法追究刑事责任；虚开普通发票的可处1-5倍罚款", taxPolicy: "《发票管理办法》第二十二条、《刑法》第二百零五条" },
+  q7: { title: "变票入账", module: "invoiceRisk", consequence: "涉嫌虚开发票或偷税，补缴税款+滞纳金+罚款，情节严重追究刑事责任", taxPolicy: "《发票管理办法》第二十二条、《刑法》第二百零五条" },
+  q8: { title: "进项税异常", module: "invoiceRisk", consequence: "进项税额转出，补缴增值税+滞纳金，涉嫌虚开的按偷税处理", taxPolicy: "《增值税暂行条例》第九条、《税收征收管理法》第六十三条" },
+  q9: { title: "增值税税负异常", module: "taxBurden", consequence: "触发税务预警，税务机关要求说明理由或进行纳税评估", taxPolicy: "《税收征收管理法》第三十五条" },
+  q10: { title: "企业所得税税负异常", module: "taxBurden", consequence: "列入纳税评估对象，可能被核定征收或稽查", taxPolicy: "《税收征收管理法》第三十五条" },
+  q11: { title: "利润偏低", module: "taxBurden", consequence: "触发转让定价调查，税务机关有权进行特别纳税调整", taxPolicy: "《企业所得税法》第四十一条、第四十七条" },
+  q12: { title: "增值税申报异常", module: "taxBurden", consequence: "触发税务预警，可能被要求提供说明或接受纳税评估", taxPolicy: "《税收征收管理法》第二十五条、第三十五条" },
+  q13: { title: "个人消费报销", module: "financialIrregularity", consequence: "调增应纳税所得额，补缴企业所得税+个人所得税+滞纳金+罚款", taxPolicy: "《企业所得税法》第八条、第十条、《个人所得税法》第二条" },
+  q14: { title: "私户收款", module: "financialIrregularity", consequence: "隐瞒收入按偷税处理，补缴税款+滞纳金+0.5-5倍罚款，情节严重追究刑责", taxPolicy: "《税收征收管理法》第六十三条、《刑法》第二百零一条" },
+  q15: { title: "两套账", module: "financialIrregularity", consequence: "按偷税处理，补缴税款+滞纳金+0.5-5倍罚款，情节严重追究刑事责任", taxPolicy: "《税收征收管理法》第六十三条、《会计法》第四十二条" },
+  q16: { title: "账实不符", module: "financialIrregularity", consequence: "纳税调整，补缴税款+滞纳金，涉嫌偷税的处0.5-5倍罚款", taxPolicy: "《税收征收管理法》第三十五条、第六十三条" },
+  q17: { title: "税收洼地", module: "architectureRisk", consequence: "不符合实质性运营要求的，补缴税款差额及滞纳金", taxPolicy: "《企业所得税法》第四十七条" },
+  q18: { title: "关联交易", module: "architectureRisk", consequence: "税务机关有权进行特别纳税调整，补缴税款+利息", taxPolicy: "《企业所得税法》第四十一条、第四十三条" },
+  q19: { title: "多层架构", module: "architectureRisk", consequence: "一般反避税调整，补缴税款+按人民币贷款基准利率加收利息（无罚款）", taxPolicy: "《企业所得税法》第四十七条" },
+  q20: { title: "虚假工资", module: "architectureRisk", consequence: "按偷税处理，补缴税款+滞纳金+0.5-5倍罚款，情节严重追究刑事责任", taxPolicy: "《税收征收管理法》第六十三条、《刑法》第二百零一条" },
+}
+
+function getRiskLevel(answer: number, qKey: string) {
+  const info = RISK_CONSEQUENCES[qKey]
+  if (!info || answer === 0) return { level: "low", impact: "该方面暂未发现明显违规", title: info?.title || qKey }
+  if (answer === 1) return { level: "medium", impact: "存在" + info.title + "风险（程度较轻），" + info.consequence, title: info.title }
+  return { level: "high", impact: "存在" + info.title + "风险（严重），" + info.consequence, title: info.title }
+}
+
+function generateRiskId(): string {
+  const now = new Date()
+  const ts = now.getFullYear().toString() +
+    (now.getMonth() + 1).toString().padStart(2, "0") +
+    now.getDate().toString().padStart(2, "0") +
+    now.getHours().toString().padStart(2, "0") +
+    now.getMinutes().toString().padStart(2, "0") +
+    now.getSeconds().toString().padStart(2, "0") +
+    Math.floor(Math.random() * 1000).toString().padStart(3, "0")
+  return "RC" + ts
+}
 
 // ============ 类型定义 ============
 interface FormData {
@@ -297,47 +338,45 @@ export default function RiskV4Module() {
     setError(null)
     
     try {
-      const payload = {
-        enterpriseName: formData.enterpriseName,
-        creditCode: formData.creditCode,
-        contactPerson: formData.contactPerson,
-        contactPhone: formData.contactPhone,
-        industry: formData.industry,
-        revenueScale: formData.revenueScale,
-        financialData: formData.financialData,
-        riskAnswers: formData.riskAnswers,
-        version: 'v5'
+      if (!formData.enterpriseName || !formData.creditCode || !formData.contactPerson || !formData.contactPhone) {
+        throw new Error("请填写所有必填字段")
+      }
+
+      const riskId = generateRiskId()
+      const riskItems = []
+      
+      const questionKeys = Object.keys(formData.riskAnswers || {}).filter(k => k.startsWith("q"))
+      for (const qKey of questionKeys) {
+        const answer = Number(formData.riskAnswers[qKey]) || 0
+        if (answer < 0 || answer > 2) continue
+        const rl = getRiskLevel(answer, qKey)
+        riskItems.push({ questionKey: qKey, title: rl.title, level: rl.level, impact: rl.impact, module: RISK_CONSEQUENCES[qKey]?.module || "" })
       }
       
-      const data = await submitRiskAssessment(payload)
+      const highCount = riskItems.filter(r => r.level === "high").length
+      const mediumCount = riskItems.filter(r => r.level === "medium").length
+      const lowCount = riskItems.filter(r => r.level === "low").length
       
-      if (data.error) {
-        throw new Error(data.error)
+      const cacheData = {
+        riskId,
+        success: true,
+        summary: { high: highCount, medium: mediumCount, low: lowCount },
+        riskItems,
+        _basicInfo: {
+          enterpriseName: formData.enterpriseName,
+          creditCode: formData.creditCode,
+          contactPerson: formData.contactPerson,
+          contactPhone: formData.contactPhone,
+          industry: formData.industry,
+          revenueScale: formData.revenueScale,
+        }
       }
       
-      if (data.riskId) {
-        // 将完整报告数据 + 表单基本信息缓存到 sessionStorage，供报告页直接读取
-        try {
-          const cacheData = {
-            ...data,
-            _basicInfo: {
-              enterpriseName: formData.enterpriseName,
-              creditCode: formData.creditCode,
-              contactPerson: formData.contactPerson,
-              contactPhone: formData.contactPhone,
-              industry: formData.industry,
-              revenueScale: formData.revenueScale,
-            }
-          }
-          sessionStorage.setItem(`report_${data.riskId}`, JSON.stringify(cacheData))
-        } catch (e) { /* 忽略存储失败 */ }
-        setRiskId(data.riskId)
-        setSubmitSuccess(true)
-      } else {
-        throw new Error('未获取到报告ID')
-      }
+      sessionStorage.setItem("report_" + riskId, JSON.stringify(cacheData))
+      setRiskId(riskId)
+      setSubmitSuccess(true)
     } catch (err: any) {
-      setError(err.message || '提交失败，请重试')
+      setError(err.message || "提交失败，请重试")
     } finally {
       setIsSubmitting(false)
     }
