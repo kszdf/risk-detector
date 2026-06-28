@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Loader2, CheckCircle, ArrowRight, AlertCircle } from 'lucide-react'
+import { submitRiskAssessment } from '@/actions/submit-risk'
 
 // ============ 类型定义 ============
 interface FormData {
@@ -81,7 +82,7 @@ const RISK_DIMS = [
     questions: [
       { id: 'q9', text: '是否存在延迟开票确认收入、部分收入未入账或使用个人账户收款未报税？' },
       { id: 'q10', text: '是否存在账外经营（部分业务不入账，通过私人账户收支）？' },
-      { id: 'q11', text: '是否存在利润明显虚高（毛利率远超同行但无法合理解释）？' },
+      { id: 'q11', text: '是否存在毛利率明显偏低或利润异常偏低（明显低于同行业水平且无法合理解释）？' },
       { id: 'q12', text: '是否存在库存账实不符（账面库存远大于实际、或库存长期只增不减）？' },
     ]
   },
@@ -308,16 +309,10 @@ export default function RiskV4Module() {
         version: 'v5'
       }
       
-      const res = await fetch('/api/risk-v4-submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      const data = await submitRiskAssessment(payload)
       
-      const data = await res.json()
-      
-      if (!res.ok) {
-        throw new Error(data.error || '提交失败')
+      if (data.error) {
+        throw new Error(data.error)
       }
       
       if (data.riskId) {
