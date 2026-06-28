@@ -516,6 +516,107 @@ function calculateCrossValidation(
 }
 
 // 主处理函数
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { enterpriseName, creditCode, contactPerson, contactPhone, industry, revenueScale, financialData, riskAnswers, version } = body
+
+    if (!enterpriseName && !creditCode) {
+      return NextResponse.json({ error: '缺少企业名称或信用代码' }, { status: 400 })
+    }
+    if (!riskAnswers || typeof riskAnswers !== 'object') {
+      return NextResponse.json({ error: '缺少风险问卷答案' }, { status: 400 })
+    }
+
+    const tokenRes = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: FEISHU_APP_ID, app_secret: FEISHU_APP_SECRET }),
+    })
+    const tokenData = await tokenRes.json()
+    const accessToken = tokenData.access_token
+    if (!accessToken) {
+      return NextResponse.json({ error: '飞书认证失败' }, { status: 500 })
+    }
+
+    const riskId = Date.now().toString() + Math.random().toString().slice(2, 13)
+
+    const fields: Record<string, any> = {}
+    fields['企业名称'] = enterpriseName || ''
+    fields['统一社会信用代码'] = creditCode || ''
+    fields['联系人'] = contactPerson || ''
+    fields['联系电话'] = contactPhone || ''
+    fields['所属行业'] = industry || ''
+    fields['年营收规模'] = revenueScale || ''
+    fields['报告状态'] = '待审核'
+    fields['风险检测ID'] = riskId
+    fields['版本'] = version || 'v5'
+    fields['检测时间'] = new Date().toISOString().replace('T', ' ').slice(0, 19)
+
+    if (financialData) {
+      fields['营业收入(万元)'] = financialData.revenue ? Number(financialData.revenue) : 0
+      fields['资产总额(万元)'] = financialData.totalAssets ? Number(financialData.totalAssets) : 0
+      fields['负债总额(万元)'] = financialData.totalLiabilities ? Number(financialData.totalLiabilities) : 0
+      fields['毛利率(%)'] = financialData.grossMargin ? Number(financialData.grossMargin) : 0
+      fields['净利率(%)'] = financialData.netMargin ? Number(financialData.netMargin) : 0
+      fields['增值税税负率(%)'] = financialData.vatRate ? Number(financialData.vatRate) : 0
+      fields['所得税贡献率(%)'] = financialData.citRate ? Number(financialData.citRate) : 0
+      fields['资产负债率(%)'] = financialData.liabilityRatio ? Number(financialData.liabilityRatio) : 0
+    }
+
+    for (const [qKey, answer] of Object.entries(riskAnswers)) {
+      const fieldName = QUESTION_FIELD_MAP[qKey]
+      if (fieldName) {
+        fields[fieldName] = answer
+      }
+    }
+
+    const answers = Object.values(riskAnswers) as number[]
+    const highCount = answers.filter(a => a === 2).length
+    const mediumCount = answers.filter(a => a === 1).length
+    const lowCount = answers.filter(a => a === 0).length
+
+    let riskLevel = '低风险'
+    if (highCount >= 3 || (highCount >= 2 && mediumCount >= 3)) riskLevel = '极高风险'
+    else if (highCount >= 2 || (highCount >= 1 && mediumCount >= 3)) riskLevel = '高风险'
+    else if (highCount >= 1 || mediumCount >= 4) riskLevel = '中风险'
+    else if (mediumCount >= 2) riskLevel = '中低风险'
+
+    fields['风险等级'] = riskLevel
+    fields['高风险项数'] = highCount
+    fields['中风险项数'] = mediumCount
+    fields['低风险项数'] = lowCount
+
+    const createRes = await fetch(
+      `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ fields }),
+      }
+    )
+    const createData = await createRes.json()
+
+    if (createData.code !== 0) {
+      console.error('飞书写入失败:', JSON.stringify(createData))
+      return NextResponse.json({ error: '写入飞书失败: ' + (createData.msg || '未知错误') }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      riskId,
+      riskLevel,
+      riskCounts: { red: highCount, yellow: mediumCount, green: lowCount },
+    })
+  } catch (error) {
+    console.error('提交异常:', error)
+    return NextResponse.json({ error: '提交失败' }, { status: 500 })
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
