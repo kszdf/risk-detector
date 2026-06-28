@@ -373,6 +373,26 @@ export default function RiskV4Module() {
       }
       
       sessionStorage.setItem("report_" + riskId, JSON.stringify(cacheData))
+
+      // 异步同步到飞书多维表（不阻塞用户跳转）
+      try {
+        const params = new URLSearchParams({
+          riskId,
+          enterpriseName: formData.enterpriseName,
+          creditCode: formData.creditCode,
+          contactPerson: formData.contactPerson,
+          contactPhone: formData.contactPhone,
+          industry: formData.industry || "",
+          revenueScale: formData.revenueScale || "",
+          highCount: String(highCount),
+          mediumCount: String(mediumCount),
+          lowCount: String(lowCount),
+          reportContent: JSON.stringify(cacheData),
+          answers: JSON.stringify(formData.riskAnswers),
+        })
+        fetch("/api/feishu-sync?" + params.toString()).catch(() => {})
+      } catch (_e) { /* 飞书同步失败不影响主流程 */ }
+
       setRiskId(riskId)
       setSubmitSuccess(true)
     } catch (err: any) {
