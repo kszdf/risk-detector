@@ -857,7 +857,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['实缴所得税(万元)'] = financialData.incomeTaxPaid;
   fields['总资产(万元)'] = financialData.totalAssets;
   fields['总负债(万元)'] = financialData.totalLiabilities;
-  fields['毛利率(%)'] = financialMetrics.grossMargin;
+  fields['毛利率'] = financialMetrics.grossMargin;
   fields['增值税税负率'] = financialMetrics.vatRate;
   fields['所得税贡献率'] = financialMetrics.citRate;
   fields['资产负债率'] = financialMetrics.debtRatio;
@@ -869,22 +869,9 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['高风险项数'] = redCount;
   fields['中风险项数'] = yellowCount;
   fields['低风险项数'] = greenCount;
-  // 20题风险程度写入独立字段（0=无此情况, 1=存在但较轻, 2=存在且严重，支持飞书端人工审核修改）
-  const QUESTION_FIELD_MAP: Record<string, string> = {
-    'q1': 'q1_逾期申报', 'q2': 'q2_连续零申报', 'q3': 'q3_增值税与所得税收入差异',
-    'q4': 'q4_连续三年亏损', 'q5': 'q5_异常发票', 'q6': 'q6_发票经营范围不符',
-    'q7': 'q7_变票入账', 'q8': 'q8_进销项不匹配', 'q9': 'q9_隐匿收入',
-    'q10': 'q10_账外经营', 'q11': 'q11_利润虚高', 'q12': 'q12_库存账实不符',
-    'q13': 'q13_个人消费报销', 'q14': 'q14_股东往来款过大', 'q15': 'q15_利润临界值享受小微',
-    'q16': 'q16_三无费用', 'q17': 'q17_税收洼地核定', 'q18': 'q18_关联交易价格偏离',
-    'q19': 'q19_多层架构转移利润', 'q20': 'q20_非实际员工发工资'
-  };
-  for (const [qKey, fieldName] of Object.entries(QUESTION_FIELD_MAP)) {
-    fields[fieldName] = Number(riskAnswers[qKey]) || 0;
-  }
 
   fields['问卷明细'] = JSON.stringify(riskAnswers);
-  fields['财务数据'] = JSON.stringify(financialData);
+  fields['年度财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
 
   // 风险项明细（包含税收政策依据）
@@ -900,7 +887,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     : '暂无明显矛盾';
 
   // 报告内容（v5版本JSON结构）
-  fields['报告内容JSON'] = generateV5ReportContent({
+  fields['报告内容'] = generateV5ReportContent({
     riskId,
     period,
     overallLevel,

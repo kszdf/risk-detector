@@ -576,13 +576,13 @@ export async function GET(req: NextRequest) {
     const period = extractFeishuText(fields['所属期']) || extractFeishuText(fields['检测时间'])?.split(' ')[0] || '';
     basicInfo.period = period;
 
-    // 从20个字段读取三档风险等级（0=无此情况, 1=存在但较轻, 2=存在且严重）
+    // 从问卷明细JSON读取20题答案（0=无此情况, 1=存在但较轻, 2=存在且严重）
     const riskAnswers: Record<string, number> = {};
-    for (let i = 1; i <= 20; i++) {
-      const key = `q${i}`;
-      const fieldName = QUESTION_FIELD_MAP[key];
-      if (fieldName) {
-        riskAnswers[key] = extractFeishuRiskLevel(fields[fieldName]);
+    const surveyDetail = extractJsonField(fields['问卷明细']);
+    if (surveyDetail && typeof surveyDetail === 'object') {
+      for (let i = 1; i <= 20; i++) {
+        const key = `q${i}`;
+        riskAnswers[key] = Number(surveyDetail[key]) || 0;
       }
     }
 
