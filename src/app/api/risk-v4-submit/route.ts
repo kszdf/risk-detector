@@ -1188,7 +1188,7 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   fields['所属期'] = period;
   fields['年营收规模'] = revenueScale;
   fields['营业收入(万元)'] = latestData?.revenue || 0;
-  fields['毛利率(%)'] = grossMargin;
+  fields['毛利率'] = grossMargin;
   fields['增值税税负率'] = vatRate;
   fields['所得税贡献率'] = citRate;
   fields['资产负债率'] = debtRatio;
