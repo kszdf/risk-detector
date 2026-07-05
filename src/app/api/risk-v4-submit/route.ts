@@ -24,21 +24,37 @@ function generateQccToken() {
   return { token, timespan };
 }
 
+// 带重试的企查查API调用（Vercel海外IP访问不稳定，自动重试2次）
+async function fetchQccApi(url: string): Promise<any> {
+  let lastError: any = null;
+  for (let i = 0; i <= 2; i++) {
+    try {
+      const { token, timespan } = generateQccToken();
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Token': token, 'Timespan': timespan }
+      });
+      return await response.json();
+    } catch (e) {
+      lastError = e;
+      if (i < 2) {
+        await new Promise(r => setTimeout(r, 300 * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // 企查查模糊搜索（886接口，0.1元/次）
 async function fuzzySearchCompany(keyword: string): Promise<{ name: string; creditCode: string } | null> {
   if (!keyword || keyword.length < 2) return null;
   
-  const { token, timespan } = generateQccToken();
   const url = new URL(`${QCC_BASE_URL}/FuzzySearch/GetList`);
   url.searchParams.append('key', QCC_APP_KEY);
   url.searchParams.append('searchKey', keyword);
 
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Token': token, 'Timespan': timespan }
-    });
-    const data = await response.json();
+    const data = await fetchQccApi(url.toString());
     
     if (data.Status === '200' && data.Result && data.Result.length > 0) {
       const first = data.Result[0];
@@ -88,17 +104,12 @@ async function getQccCompanyInfo(keyword: string): Promise<Record<string, any> |
 async function fetchQccDetail(companyName: string): Promise<Record<string, any> | null> {
   if (!companyName) return null;
   
-  const { token, timespan } = generateQccToken();
   const url = new URL(`${QCC_BASE_URL}/ECIV4/GetBasicDetailsByName`);
   url.searchParams.append('key', QCC_APP_KEY);
   url.searchParams.append('keyword', companyName);
 
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Token': token, 'Timespan': timespan }
-    });
-    const data = await response.json();
+    const data = await fetchQccApi(url.toString());
     
     if (data.Status === '200' && data.Result) {
       const r = data.Result;

@@ -20,6 +20,27 @@ function generateToken() {
   return { token, timespan };
 }
 
+// 带重试的fetch
+async function fetchWithRetry(url, options, retries = 2) {
+  let lastError = null;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const { token, timespan } = generateToken();
+      const headers = { ...options.headers, Token: token, Timespan: timespan };
+      // 每次重试重新拼接URL（带上新的key参数，虽然key不变但保险起见）
+      const response = await fetch(url, { ...options, headers });
+      const data = await response.json();
+      return data;
+    } catch (e) {
+      lastError = e;
+      if (i < retries) {
+        await new Promise(r => setTimeout(r, 300 * (i + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 // 调用企查查API - 企业工商信息 (ApiCode 410)
 export async function getCompanyBasicInfo(keyword) {
   if (!keyword) return null;
@@ -31,16 +52,7 @@ export async function getCompanyBasicInfo(keyword) {
   url.searchParams.append('keyword', keyword);
 
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Token': token,
-        'Timespan': timespan,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const data = await response.json();
+    const data = await fetchWithRetry(url.toString(), { method: 'GET' });
     
     if (data.Status === '200' && data.Result) {
       const r = data.Result;
@@ -88,15 +100,7 @@ export async function searchCompany(keyword, pageSize = 5) {
   url.searchParams.append('pageIndex', 1);
 
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: {
-        'Token': token,
-        'Timespan': timespan
-      }
-    });
-
-    const data = await response.json();
+    const data = await fetchWithRetry(url.toString(), { method: 'GET' });
     
     if (data.Status === '200' && data.Result) {
       return {
