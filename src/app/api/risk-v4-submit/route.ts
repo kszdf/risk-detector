@@ -9,15 +9,81 @@ const QCC_SECRET_KEY = process.env.QCC_SECRET_KEY || 'CABF5EE954826B72B15A7D7DE4
 const QCC_BASE_URL = 'https://api.qichacha.com';
 
 // 企查查工商信息查询 (ApiCode 410)
+// 生成企查查API签名Token
+function generateQccToken() {
+  const timespan = Math.floor(Date.now() / 1000).toString();
+  const token = crypto.createHash('md5').update(QCC_APP_KEY + timespan + QCC_SECRET_KEY).digest('hex').toUpperCase();
+  return { token, timespan };
+}
+
+// 企查查模糊搜索（886接口，0.1元/次）
+async function fuzzySearchCompany(keyword: string): Promise<{ name: string; creditCode: string } | null> {
+  if (!keyword || keyword.length < 2) return null;
+  
+  const { token, timespan } = generateQccToken();
+  const url = new URL(`${QCC_BASE_URL}/FuzzySearch/GetList`);
+  url.searchParams.append('key', QCC_APP_KEY);
+  url.searchParams.append('searchKey', keyword);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Token': token, 'Timespan': timespan }
+    });
+    const data = await response.json();
+    
+    if (data.Status === '200' && data.Result && data.Result.length > 0) {
+      const first = data.Result[0];
+      // 返回第一个最匹配的企业名称和统一信用代码
+      return {
+        name: first.Name || first.CompanyName || '',
+        creditCode: first.CreditCode || ''
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('企查查模糊搜索失败:', error);
+    return null;
+  }
+}
+
 async function getQccCompanyInfo(keyword: string): Promise<Record<string, any> | null> {
   if (!keyword || keyword.length < 2) return null;
   
-  const timespan = Math.floor(Date.now() / 1000).toString();
-  const token = crypto.createHash('md5').update(QCC_APP_KEY + timespan + QCC_SECRET_KEY).digest('hex').toUpperCase();
+  // 第一步：用关键词模糊搜索，获取匹配企业的信用代码
+  let creditCode = '';
+  let exactName = keyword;
   
+  // 如果关键词本身就是18位信用代码，直接用
+  if (/^[0-9A-HJ-NPQRTUWXY]{2}\d{6}[0-9A-HJ-NPQRTUWXY]{10}$/.test(keyword)) {
+    creditCode = keyword;
+  } else {
+    // 模糊搜索找最匹配的企业，拿信用代码
+    const searchResult = await fuzzySearchCompany(keyword);
+    if (searchResult) {
+      creditCode = searchResult.creditCode || '';
+      exactName = searchResult.name || keyword;
+    }
+  }
+  
+  // 第二步：用18位统一信用代码精确查询详情
+  if (creditCode) {
+    const result = await fetchQccDetail(creditCode);
+    if (result) return result;
+  }
+  
+  // 兜底：直接用关键词试一次
+  return await fetchQccDetail(keyword);
+}
+
+// 企查查详情查询（410接口，0.2元/次）
+async function fetchQccDetail(companyName: string): Promise<Record<string, any> | null> {
+  if (!companyName) return null;
+  
+  const { token, timespan } = generateQccToken();
   const url = new URL(`${QCC_BASE_URL}/ECIV4/GetBasicDetailsByName`);
   url.searchParams.append('key', QCC_APP_KEY);
-  url.searchParams.append('keyword', keyword);
+  url.searchParams.append('keyword', companyName);
 
   try {
     const response = await fetch(url.toString(), {
@@ -54,7 +120,7 @@ async function getQccCompanyInfo(keyword: string): Promise<Record<string, any> |
     }
     return null;
   } catch (error) {
-    console.error('企查查API调用失败:', error);
+    console.error('企查查详情查询失败:', error);
     return null;
   }
 }
@@ -782,7 +848,6 @@ async function sendFeishuNotification(params: {
     const token = await getFeishuToken();
     if (!token) return;
     const { riskId, companyName, contactName, contactPhone, industry, riskLevel } = params;
-    const reportUrl = `https://pq3s843fph.coze.site/report?riskId=${riskId}`;
     const content = JSON.stringify({
       config: { wide_screen_mode: true },
       header: { title: { tag: 'plain_text', content: '🔔 新客户风险筛查提交' }, template: 'blue' },
@@ -790,7 +855,7 @@ async function sendFeishuNotification(params: {
         tag: 'div',
         text: {
           tag: 'lark_md',
-          content: `📋 企业：${companyName || '未填写'}\n👤 联系人：${contactName || '未填写'}\n📱 电话：${contactPhone || '未填写'}\n🏢 行业：${industry || '未填写'}\n⚠️ 风险等级：${riskLevel}\n\n👉 [点击查看报告](${reportUrl})`
+          content: `📋 企业：${companyName || '未填写'}\n👤 联系人：${contactName || '未填写'}\n📱 电话：${contactPhone || '未填写'}\n🏢 行业：${industry || '未填写'}\n⚠️ 风险等级：${riskLevel}\n🆔 检测ID：${riskId}\n\n👉 请登录飞书多维表查看完整报告详情`
         }
       }]
     });

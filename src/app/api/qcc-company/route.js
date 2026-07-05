@@ -110,6 +110,27 @@ export async function searchCompany(keyword, pageSize = 5) {
   }
 }
 
+// 统一查询入口：先模糊搜索拿信用代码，再用代码精确查详情
+async function getCompanyInfoByKeyword(keyword) {
+  if (!keyword || keyword.length < 2) return null;
+
+  // 如果关键词本身就是18位统一信用代码，直接查详情
+  if (/^[0-9A-HJ-NPQRTUWXY]{2}\d{6}[0-9A-HJ-NPQRTUWXY]{10}$/.test(keyword)) {
+    return await getCompanyBasicInfo(keyword);
+  }
+
+  // 第一步：模糊搜索找最匹配的企业，拿信用代码
+  const searchResults = await searchCompany(keyword, 1);
+  if (searchResults && searchResults.length > 0 && searchResults[0].creditCode) {
+    // 第二步：用18位统一信用代码精确查询详情
+    const detail = await getCompanyBasicInfo(searchResults[0].creditCode);
+    if (detail) return detail;
+  }
+
+  // 兜底：直接用关键词试一次
+  return await getCompanyBasicInfo(keyword);
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const keyword = searchParams.get('keyword');
@@ -124,8 +145,8 @@ export async function GET(request) {
     return NextResponse.json({ success: true, data: results });
   }
 
-  // 默认查询详情
-  const detail = await getCompanyBasicInfo(keyword);
+  // 默认查询详情：走信用代码精确查询逻辑
+  const detail = await getCompanyInfoByKeyword(keyword);
   if (detail) {
     return NextResponse.json({ success: true, data: detail });
   } else {
