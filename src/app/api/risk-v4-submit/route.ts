@@ -24,21 +24,25 @@ function generateQccToken() {
   return { token, timespan };
 }
 
-// 带重试的企查查API调用（Vercel海外IP访问不稳定，自动重试2次）
+// 带重试的企查查API调用（Vercel海外IP访问不稳定，快速失败+重试）
 async function fetchQccApi(url: string): Promise<any> {
   let lastError: any = null;
-  for (let i = 0; i <= 2; i++) {
+  for (let i = 0; i <= 1; i++) {
     try {
       const { token, timespan } = generateQccToken();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const response = await fetch(url, {
         method: 'GET',
-        headers: { 'Token': token, 'Timespan': timespan }
+        headers: { 'Token': token, 'Timespan': timespan },
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       return await response.json();
     } catch (e) {
       lastError = e;
-      if (i < 2) {
-        await new Promise(r => setTimeout(r, 300 * (i + 1)));
+      if (i < 1) {
+        await new Promise(r => setTimeout(r, 500));
       }
     }
   }

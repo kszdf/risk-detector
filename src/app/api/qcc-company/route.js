@@ -20,21 +20,23 @@ function generateToken() {
   return { token, timespan };
 }
 
-// 带重试的fetch
-async function fetchWithRetry(url, options, retries = 2) {
+// 带重试的fetch（Vercel海外IP访问国内API不稳定，快速失败+重试）
+async function fetchWithRetry(url, options, retries = 1) {
   let lastError = null;
   for (let i = 0; i <= retries; i++) {
     try {
       const { token, timespan } = generateToken();
       const headers = { ...options.headers, Token: token, Timespan: timespan };
-      // 每次重试重新拼接URL（带上新的key参数，虽然key不变但保险起见）
-      const response = await fetch(url, { ...options, headers });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4秒超时
+      const response = await fetch(url, { ...options, headers, signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await response.json();
       return data;
     } catch (e) {
       lastError = e;
       if (i < retries) {
-        await new Promise(r => setTimeout(r, 300 * (i + 1)));
+        await new Promise(r => setTimeout(r, 500));
       }
     }
   }
