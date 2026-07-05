@@ -77,7 +77,7 @@ export async function getCompanyBasicInfo(keyword) {
 
 // 调用企查查API - 企业模糊搜索 (ApiCode 886)
 export async function searchCompany(keyword, pageSize = 5) {
-  if (!keyword || keyword.length < 2) return [];
+  if (!keyword || keyword.length < 2) return { result: [], raw: null };
   
   const { token, timespan } = generateToken();
   
@@ -99,21 +99,24 @@ export async function searchCompany(keyword, pageSize = 5) {
     const data = await response.json();
     
     if (data.Status === '200' && data.Result) {
-      return data.Result.map(item => ({
-        keyNo: item.KeyNo,
-        name: item.Name,
-        creditCode: item.CreditCode,
-        startDate: item.StartDate,
-        operName: item.OperName,
-        status: item.Status,
-        no: item.No,
-        address: item.Address
-      }));
+      return {
+        result: data.Result.map(item => ({
+          keyNo: item.KeyNo,
+          name: item.Name,
+          creditCode: item.CreditCode,
+          startDate: item.StartDate,
+          operName: item.OperName,
+          status: item.Status,
+          no: item.No,
+          address: item.Address
+        })),
+        raw: data
+      };
     }
-    return [];
+    return { result: [], raw: data };
   } catch (error) {
     console.error('企查查搜索失败:', error.message);
-    return [];
+    return { result: [], raw: { error: error.message } };
   }
 }
 
@@ -127,7 +130,7 @@ async function getCompanyInfoByKeyword(keyword) {
   }
 
   // 第一步：模糊搜索找最匹配的企业，拿信用代码
-  const searchResults = await searchCompany(keyword, 1);
+  const { result: searchResults } = await searchCompany(keyword, 1);
   if (searchResults && searchResults.length > 0 && searchResults[0].creditCode) {
     // 第二步：用18位统一信用代码精确查询详情
     const detail = await getCompanyBasicInfo(searchResults[0].creditCode);
@@ -142,14 +145,25 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const keyword = searchParams.get('keyword');
   const action = searchParams.get('action') || 'detail';
+  const debug = searchParams.get('debug') === '1';
 
   if (!keyword) {
     return NextResponse.json({ error: '请提供企业名称或统一社会信用代码' }, { status: 400 });
   }
 
   if (action === 'search') {
-    const results = await searchCompany(keyword);
-    return NextResponse.json({ success: true, data: results });
+    const { result, raw } = await searchCompany(keyword);
+    const resp = { success: true, data: result };
+    if (debug) {
+      resp.debug = {
+        key_prefix: QCC_APP_KEY.substring(0, 8) + '...',
+        key_format_valid: /^[a-fA-F0-9]{32}$/.test(QCC_APP_KEY),
+        secret_prefix: QCC_SECRET_KEY.substring(0, 8) + '...',
+        secret_format_valid: /^[a-fA-F0-9]{32}$/.test(QCC_SECRET_KEY),
+        raw_response: raw
+      };
+    }
+    return NextResponse.json(resp);
   }
 
   // 默认查询详情：走信用代码精确查询逻辑
