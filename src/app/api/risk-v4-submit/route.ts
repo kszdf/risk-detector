@@ -1023,15 +1023,9 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['年度财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
 
-  // 企查查工商信息
+  // 企查查工商信息（只写JSON字段，减少字段依赖）
   if (qccCompanyInfo) {
     fields['工商信息'] = JSON.stringify(qccCompanyInfo);
-    fields['法定代表人'] = qccCompanyInfo.operName || '';
-    fields['成立日期'] = qccCompanyInfo.startDate || '';
-    fields['注册资本'] = qccCompanyInfo.registCapi || '';
-    fields['企业类型'] = qccCompanyInfo.econKind || '';
-    fields['注册地址'] = qccCompanyInfo.address || '';
-    fields['登记状态'] = qccCompanyInfo.status || '';
   }
 
   // 风险项明细（包含税收政策依据）
