@@ -566,6 +566,9 @@ export async function GET(req: NextRequest) {
       creditCode: extractFeishuText(fields['统一信用代码'])
     };
 
+    // 提取企查查工商信息
+    const qccCompanyInfo = extractJsonField(fields['工商信息']);
+
     // 提取财务数据（从独立字段）
     const revenue = getNumber(fields['营业收入(万元)']);
     const cost = getNumber(fields['营业成本(万元)']);
@@ -702,6 +705,7 @@ export async function GET(req: NextRequest) {
         green: greenCount
       },
       reportStatus,
+      qccCompanyInfo,
       reportContent: {
         overview: {
           riskId,

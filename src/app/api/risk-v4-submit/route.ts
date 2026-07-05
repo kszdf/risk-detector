@@ -1,6 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 
 export const runtime = 'nodejs';
+
+// 企查查API配置
+const QCC_APP_KEY = process.env.QCC_APP_KEY || 'af2b3e9c39a64a2c9a926e102545adcd';
+const QCC_SECRET_KEY = process.env.QCC_SECRET_KEY || 'CABF5EE954826B72B15A7D7DE41979D9';
+const QCC_BASE_URL = 'https://api.qichacha.com';
+
+// 企查查工商信息查询 (ApiCode 410)
+async function getQccCompanyInfo(keyword: string): Promise<Record<string, any> | null> {
+  if (!keyword || keyword.length < 2) return null;
+  
+  const timespan = Math.floor(Date.now() / 1000).toString();
+  const token = crypto.createHash('md5').update(QCC_APP_KEY + timespan + QCC_SECRET_KEY).digest('hex').toUpperCase();
+  
+  const url = new URL(`${QCC_BASE_URL}/ECIV4/GetBasicDetailsByName`);
+  url.searchParams.append('key', QCC_APP_KEY);
+  url.searchParams.append('keyword', keyword);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Token': token, 'Timespan': timespan }
+    });
+    const data = await response.json();
+    
+    if (data.Status === '200' && data.Result) {
+      const r = data.Result;
+      return {
+        name: r.Name,
+        creditCode: r.CreditCode,
+        operName: r.OperName,
+        startDate: r.StartDate,
+        status: r.Status,
+        registCapi: r.RegistCapi,
+        econKind: r.EconKind,
+        address: r.Address,
+        scope: r.Scope,
+        termStart: r.TermStart,
+        termEnd: r.TermEnd,
+        belongOrg: r.BelongOrg,
+        checkDate: r.CheckDate,
+        isOnStock: r.IsOnStock,
+        entType: r.EntType,
+        recCap: r.RecCap,
+        province: r.Province,
+        areaCode: r.AreaCode,
+        area: r.Area,
+        imageUrl: r.ImageUrl,
+        source: '企查查'
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('企查查API调用失败:', error);
+    return null;
+  }
+}
 
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
@@ -803,6 +860,10 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   const contactPhone = String(body.contactPhone || '');
   const period = financialData.periodValue;
 
+  // 调用企查查获取工商信息（用企业名称或统一信用代码查询）
+  const qccKeyword = enterpriseName || creditCode;
+  const qccCompanyInfo = qccKeyword ? await getQccCompanyInfo(qccKeyword) : null;
+
   // 解析20题三档答案（0=无此情况, 1=存在但较轻, 2=存在且严重）
   const riskAnswersRaw = body.riskAnswers as Record<string, unknown> || {};
   const riskAnswers: Record<string, number> = {};
@@ -874,6 +935,17 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['年度财务数据'] = JSON.stringify(financialData);
   fields['财务指标'] = JSON.stringify(financialMetrics);
 
+  // 企查查工商信息
+  if (qccCompanyInfo) {
+    fields['工商信息'] = JSON.stringify(qccCompanyInfo);
+    fields['法定代表人'] = qccCompanyInfo.operName || '';
+    fields['成立日期'] = qccCompanyInfo.startDate || '';
+    fields['注册资本'] = qccCompanyInfo.registCapi || '';
+    fields['企业类型'] = qccCompanyInfo.econKind || '';
+    fields['注册地址'] = qccCompanyInfo.address || '';
+    fields['登记状态'] = qccCompanyInfo.status || '';
+  }
+
   // 风险项明细（包含税收政策依据）
   fields['风险项明细'] = [
     ...highRiskItems.map(i => `🔴${i.name}（依据：${i.taxPolicy}）`),
@@ -942,7 +1014,8 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     crossValidation,
     industryBenchmarks,
     financialMetrics,
-    reportStatus: '待审核'
+    reportStatus: '待审核',
+    qccCompanyInfo
   };
 }
 
