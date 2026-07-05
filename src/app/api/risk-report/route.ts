@@ -6,6 +6,9 @@ const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
 const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
 const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || '';
 
+// 管理员密钥（用于查看完整报告）
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'hgttax_admin_2026';
+
 // 行业基准数据
 const INDUSTRY_BENCHMARKS: Record<string, {
   grossMargin: { min: number; max: number };
@@ -720,6 +723,66 @@ export async function GET(req: NextRequest) {
       if (item.moduleName) moduleSet.add(item.moduleName);
     });
     mainRiskAreas = Array.from(moduleSet).slice(0, 3);
+
+    // 管理员密钥验证：传对了直接返回完整报告，无视状态限制
+    const adminToken = searchParams.get('admin_token');
+    const isAdmin = adminToken === ADMIN_TOKEN;
+
+    if (isAdmin) {
+      // 构建完整报告数据
+      return NextResponse.json({
+        basicInfo,
+        riskLevel: extractFeishuText(fields['综合风险等级']) || overallLevel,
+        riskCounts: {
+          red: redCount,
+          yellow: yellowCount,
+          green: greenCount
+        },
+        reportStatus: finalReportStatus,
+        mainRiskAreas,
+        qccCompanyInfo,
+        isAdmin: true,
+        reportContent: {
+          overview: {
+            riskId,
+            period,
+            level: overallLevel,
+            levelIcon,
+            redCount,
+            yellowCount,
+            greenCount
+          },
+          highRiskItems,
+          mediumRiskItems,
+          lowRiskItems,
+          trendWarnings: [],
+          crossValidation,
+          industryBenchmarks,
+          financialIndicators: [{
+            period,
+            grossMargin: metrics.grossMargin,
+            vatRate: metrics.vatRate,
+            citRate: metrics.citRate,
+            netMargin: 0,
+            liabilityRatio: metrics.debtRatio
+          }]
+        },
+        createdAt: detectionTime,
+        financialMetrics: {
+          period,
+          revenue,
+          cost,
+          vatPaid,
+          incomeTaxPaid,
+          totalAssets,
+          totalLiabilities,
+          grossMargin: metrics.grossMargin,
+          vatRate: metrics.vatRate,
+          citRate: metrics.citRate,
+          debtRatio: metrics.debtRatio
+        }
+      });
+    }
 
     // 根据报告状态返回不同粒度的数据
     // 待审核：仅返回基本信息，不泄露任何风险数据
