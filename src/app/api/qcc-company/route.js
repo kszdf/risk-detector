@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const QCC_APP_KEY = process.env.QCC_APP_KEY || 'af2b3e9c39a64a2c9a926e102545adcd';
-const QCC_SECRET_KEY = process.env.QCC_SECRET_KEY || 'CABF5EE954826B72B15A7D7DE41979D9';
+function cleanEnvKey(val, fallback) {
+  if (!val) return fallback;
+  const trimmed = val.trim();
+  if (/^[a-fA-F0-9]{32}$/.test(trimmed)) return trimmed;
+  return fallback;
+}
+
+const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, 'af2b3e9c39a64a2c9a926e102545adcd');
+const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, 'CABF5EE954826B72B15A7D7DE41979D9');
 const QCC_BASE_URL = 'https://api.qichacha.com';
 
 // 生成企查查API签名Token

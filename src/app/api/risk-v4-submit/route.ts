@@ -4,8 +4,16 @@ import crypto from 'crypto';
 export const runtime = 'nodejs';
 
 // 企查查API配置
-const QCC_APP_KEY = process.env.QCC_APP_KEY || 'af2b3e9c39a64a2c9a926e102545adcd';
-const QCC_SECRET_KEY = process.env.QCC_SECRET_KEY || 'CABF5EE954826B72B15A7D7DE41979D9';
+function cleanEnvKey(val: string | undefined, fallback: string): string {
+  if (!val) return fallback;
+  const trimmed = val.trim();
+  // 企查查Key为32位十六进制字符串，格式不对则用fallback
+  if (/^[a-fA-F0-9]{32}$/.test(trimmed)) return trimmed;
+  return fallback;
+}
+
+const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, 'af2b3e9c39a64a2c9a926e102545adcd');
+const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, 'CABF5EE954826B72B15A7D7DE41979D9');
 const QCC_BASE_URL = 'https://api.qichacha.com';
 
 // 企查查工商信息查询 (ApiCode 410)
