@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
-const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || 'O2kRbtdK7aOGV9sUgYAcwMyqnve';
-const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || 'tblvg4VWPMt6yCjX';
+const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || 'MQEcbOxiealqEyshlY1cRZV2nPf';
+const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || 'tblhY9GXFXUdlR83';
 
 // 管理员密钥（用于查看完整报告）
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'hgttax_admin_2026';
