@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel
+  WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel,
+  ImageRun
 } from 'docx';
+import fs from 'fs';
+import path from 'path';
 
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
@@ -250,6 +253,17 @@ export async function GET(request: NextRequest) {
 
     const { color: riskColor } = getRiskLevel(totalScore);
 
+    // 读取LOGO图片
+    let logoImageBuffer: Buffer | null = null;
+    try {
+      const logoPath = path.join(process.cwd(), 'public', 'logo.jpg');
+      if (fs.existsSync(logoPath)) {
+        logoImageBuffer = fs.readFileSync(logoPath);
+      }
+    } catch (e) {
+      // LOGO读取失败不影响报告生成
+    }
+
     // 构建Word文档
     const doc = new Document({
       sections: [{
@@ -260,6 +274,17 @@ export async function GET(request: NextRequest) {
         },
         children: [
           // ========== 封面 ==========
+          // LOGO
+          ...(logoImageBuffer ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 400, after: 400 },
+            children: [new ImageRun({
+              data: logoImageBuffer,
+              transformation: { width: 150, height: 150 },
+              type: 'jpg'
+            })]
+          })] : []),
+
           createTitle('财税风险检测报告', 44, '1a56db'),
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -340,40 +365,60 @@ export async function GET(request: NextRequest) {
           createInfoRow('联系电话', phone),
 
           // 工商信息（如果有）
-          businessInfo && businessInfo.regStatus ? (
-            createHeading2('工商登记信息')
-          ) : createParagraph(''),
-          businessInfo && businessInfo.regStatus ? (
+          ...(businessInfo && (businessInfo.status || businessInfo.name) ? [
+            createHeading2('工商登记信息'),
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               rows: [
                 new TableRow({
                   children: [
                     createHeaderCell('登记状态'),
-                    createDataCell(businessInfo.regStatus || '-', { align: 'center' }),
+                    createDataCell(businessInfo.status || '-', { align: 'center' }),
                     createHeaderCell('成立日期'),
-                    createDataCell(businessInfo.estiblishTime || businessInfo.startDate || '-', { align: 'center' })
+                    createDataCell(businessInfo.startDate || '-', { align: 'center' })
                   ]
                 }),
                 new TableRow({
                   children: [
                     createHeaderCell('注册资本'),
-                    createDataCell(businessInfo.regCapital || '-', { align: 'center' }),
+                    createDataCell(businessInfo.registCapi || '-', { align: 'center' }),
                     createHeaderCell('法定代表人'),
-                    createDataCell(businessInfo.legalPersonName || businessInfo.operName || '-', { align: 'center' })
+                    createDataCell(businessInfo.operName || '-', { align: 'center' })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createHeaderCell('企业类型'),
+                    createDataCell(businessInfo.econKind || '-', { align: 'center' }),
+                    createHeaderCell('所属地区'),
+                    createDataCell(businessInfo.province || '-', { align: 'center' })
                   ]
                 }),
                 new TableRow({
                   children: [
                     createHeaderCell('注册地址'),
-                    createDataCell(businessInfo.regLocation || businessInfo.address || '-', { align: 'left' }),
-                    createHeaderCell('经营状态'),
-                    createDataCell(businessInfo.regStatus || '-', { align: 'center' })
+                    new TableCell({
+                      columnSpan: 3,
+                      children: [new Paragraph({
+                        children: [new TextRun({ text: businessInfo.address || '-', size: 20 })]
+                      })]
+                    })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createHeaderCell('经营范围'),
+                    new TableCell({
+                      columnSpan: 3,
+                      children: [new Paragraph({
+                        children: [new TextRun({ text: businessInfo.scope || '-', size: 19, color: '555555' })]
+                      })]
+                    })
                   ]
                 })
               ]
             })
-          ) : createParagraph(''),
+          ] : []),
 
           // ========== 二、风险概览 ==========
           createHeading1('二、风险概览'),
@@ -449,70 +494,103 @@ export async function GET(request: NextRequest) {
           // ========== 三、详细风险分析 ==========
           createHeading1('三、详细风险分析'),
 
-          ...(riskDetails && riskDetails.modules ? Object.entries(riskDetails.modules as Record<string, any>).flatMap(([moduleKey, moduleData]: [string, any]) => {
-            const moduleName = MODULE_NAMES[moduleKey] || moduleKey;
-            const risks = moduleData.risks || [];
+          // 高风险项
+          ...(reportContent?.highRiskItems?.length ? [
+            createHeading2('🔴 高风险项'),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '721C24' },
+                      width: { size: 30, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '风险项', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    }),
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '721C24' },
+                      width: { size: 20, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '所属维度', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    }),
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '721C24' },
+                      width: { size: 50, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '风险影响与政策依据', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    })
+                  ]
+                }),
+                ...reportContent.highRiskItems.map((item: any) => new TableRow({
+                  children: [
+                    createDataCell(item.name || '-', { bold: true, color: '721C24' }),
+                    createDataCell(item.module || '-', { align: 'center' }),
+                    createDataCell(item.consequence || item.impact || '-')
+                  ]
+                }))
+              ]
+            }),
+            new Paragraph({ spacing: { after: 200 }, children: [] })
+          ] : []),
 
-            if (risks.length === 0) return [];
+          // 中风险项
+          ...(reportContent?.mediumRiskItems?.length ? [
+            createHeading2('🟡 中风险项'),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '856404' },
+                      width: { size: 30, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '风险项', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    }),
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '856404' },
+                      width: { size: 20, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '所属维度', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    }),
+                    new TableCell({
+                      shading: { type: ShadingType.CLEAR, color: 'auto', fill: '856404' },
+                      width: { size: 50, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [new TextRun({ text: '风险影响与政策依据', bold: true, color: 'ffffff', size: 20 })]
+                      })]
+                    })
+                  ]
+                }),
+                ...reportContent.mediumRiskItems.map((item: any) => new TableRow({
+                  children: [
+                    createDataCell(item.name || '-', { bold: true, color: '856404' }),
+                    createDataCell(item.module || '-', { align: 'center' }),
+                    createDataCell(item.consequence || item.impact || '-')
+                  ]
+                }))
+              ]
+            }),
+            new Paragraph({ spacing: { after: 200 }, children: [] })
+          ] : []),
 
-            return [
-              createHeading2(moduleName),
-              new Table({
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                rows: [
-                  new TableRow({
-                    children: [
-                      new TableCell({
-                        shading: { type: ShadingType.CLEAR, color: 'auto', fill: '1a56db' },
-                        width: { size: 35, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          children: [new TextRun({ text: '风险项', bold: true, color: 'ffffff', size: 20 })]
-                        })]
-                      }),
-                      new TableCell({
-                        shading: { type: ShadingType.CLEAR, color: 'auto', fill: '1a56db' },
-                        width: { size: 15, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          children: [new TextRun({ text: '等级', bold: true, color: 'ffffff', size: 20 })]
-                        })]
-                      }),
-                      new TableCell({
-                        shading: { type: ShadingType.CLEAR, color: 'auto', fill: '1a56db' },
-                        width: { size: 50, type: WidthType.PERCENTAGE },
-                        children: [new Paragraph({
-                          alignment: AlignmentType.CENTER,
-                          children: [new TextRun({ text: '影响与依据', bold: true, color: 'ffffff', size: 20 })]
-                        })]
-                      })
-                    ]
-                  }),
-                  ...risks.map((risk: any, index: number) => {
-                    const level = risk.level || 'medium';
-                    const levelInfo = level === 'high' ? RISK_COLORS.high :
-                                     level === 'medium' ? RISK_COLORS.medium : RISK_COLORS.low;
-                    const levelName = level === 'high' ? '高' : level === 'medium' ? '中' : '低';
-
-                    return new TableRow({
-                      children: [
-                        createDataCell(risk.name || risk.question || '-', { bold: true }),
-                        new TableCell({
-                          shading: { type: ShadingType.CLEAR, color: 'auto', fill: levelInfo.bg },
-                          children: [new Paragraph({
-                            alignment: AlignmentType.CENTER,
-                            children: [new TextRun({ text: levelName, bold: true, color: levelInfo.text, size: 20 })]
-                          })]
-                        }),
-                        createDataCell(risk.consequence || '-')
-                      ]
-                    });
-                  })
-                ]
-              }),
-              new Paragraph({ spacing: { after: 100 }, children: [] })
-            ];
-          }) : [createParagraph('暂无详细风险数据')]),
+          // 低风险项（简要列出）
+          ...(reportContent?.lowRiskItems?.length ? [
+            createHeading2('🟢 合规项（无风险）'),
+            createParagraph(`共 ${reportContent.lowRiskItems.length} 项合规：${reportContent.lowRiskItems.join('、')}`)
+          ] : []),
 
           // ========== 四、财务指标分析 ==========
           createHeading1('四、财务指标分析'),
@@ -600,42 +678,46 @@ export async function GET(request: NextRequest) {
           // ========== 五、交叉验证结果 ==========
           createHeading1('五、交叉验证结果'),
 
-          crossValidation && crossValidation.checks ? (
+          reportContent?.crossValidation?.length ? (
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               rows: [
                 new TableRow({
                   children: [
                     createHeaderCell('验证项目'),
-                    createHeaderCell('验证结果'),
-                    createHeaderCell('风险提示')
+                    createHeaderCell('等级'),
+                    createHeaderCell('详细说明')
                   ]
                 }),
-                ...(crossValidation.checks as Array<any>).map((check: any) => new TableRow({
+                ...reportContent.crossValidation.map((check: any) => new TableRow({
                   children: [
-                    createDataCell(check.name || '-', { bold: true }),
+                    createDataCell(check.rule || '-', { bold: true }),
                     new TableCell({
                       shading: {
                         type: ShadingType.CLEAR,
                         color: 'auto',
-                        fill: check.passed ? RISK_COLORS.low.bg : RISK_COLORS.high.bg
+                        fill: check.level === 'high' || check.levelIcon?.includes('🔴')
+                          ? RISK_COLORS.high.bg
+                          : RISK_COLORS.medium.bg
                       },
                       children: [new Paragraph({
                         alignment: AlignmentType.CENTER,
                         children: [new TextRun({
-                          text: check.passed ? '通过' : '异常',
+                          text: check.level === 'high' || check.levelIcon?.includes('🔴') ? '高风险' : '中风险',
                           bold: true,
-                          color: check.passed ? RISK_COLORS.low.text : RISK_COLORS.high.text,
+                          color: check.level === 'high' || check.levelIcon?.includes('🔴')
+                            ? RISK_COLORS.high.text
+                            : RISK_COLORS.medium.text,
                           size: 20
                         })]
                       })]
                     }),
-                    createDataCell(check.description || '-')
+                    createDataCell(check.detail || '-')
                   ]
                 }))
               ]
             })
-          ) : createParagraph('暂无交叉验证数据'),
+          ) : createParagraph('各项指标交叉验证未发现明显异常。'),
 
           // ========== 六、建议与说明 ==========
           createHeading1('六、建议与说明'),

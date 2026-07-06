@@ -698,19 +698,11 @@ export async function GET(req: NextRequest) {
     // 检测时间
     const detectionTime = extractFeishuText(fields['检测时间']);
 
-    // 动态计算报告状态：提交2小时后自动显示为"已出结论"
+    // 报告状态严格人工审核制：只有"已审核"和"已发送"才显示完整报告
+    // 待审核/需补充 → 只显示审核中提示，不泄露任何风险数据
     let finalReportStatus = reportStatus;
     let mainRiskAreas: string[] = [];
-    
-    if (detectionTime) {
-      const submitTime = new Date(detectionTime).getTime();
-      const now = Date.now();
-      const twoHours = 2 * 60 * 60 * 1000;
-      // 如果状态是"待审核"且已超过2小时，自动显示为"已出结论"
-      if (reportStatus === '待审核' && now - submitTime > twoHours) {
-        finalReportStatus = '已出结论';
-      }
-    }
+    const isApproved = reportStatus === '已审核' || reportStatus === '已发送';
 
     // 提取主要风险领域（从风险项的模块去重，取前3个）
     const moduleSet = new Set<string>();
@@ -784,11 +776,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 根据报告状态返回不同粒度的数据
-    // 待审核：仅返回基本信息，不泄露任何风险数据
-    // 已出结论：返回风险等级、数量、主要领域（简单结论）
-    // 已审核/其他：返回完整报告（预留，当前未启用）
-    if (finalReportStatus === '待审核') {
+    // 报告状态严格人工审核制
+    // 待审核/需补充：仅返回基本信息，不泄露任何风险数据
+    // 已审核/已发送：返回完整报告
+    if (!isApproved) {
       return NextResponse.json({
         basicInfo: {
           enterpriseName: basicInfo.enterpriseName,
@@ -801,32 +792,12 @@ export async function GET(req: NextRequest) {
         mainRiskAreas: [],
         reportContent: null,
         qccCompanyInfo: null,
-        createdAt: detectionTime
+        createdAt: detectionTime,
+        reviewTip: '报告正在专业审核中，通常1个工作日内出结果。如有紧急需求，请添加客服微信咨询。'
       });
     }
 
-    if (finalReportStatus === '已出结论') {
-      return NextResponse.json({
-        basicInfo: {
-          enterpriseName: basicInfo.enterpriseName,
-          industry: basicInfo.industry,
-          creditCode: basicInfo.creditCode
-        },
-        riskLevel: extractFeishuText(fields['综合风险等级']) || overallLevel,
-        riskCounts: {
-          red: redCount,
-          yellow: yellowCount,
-          green: greenCount
-        },
-        reportStatus: finalReportStatus,
-        mainRiskAreas,
-        reportContent: null,
-        qccCompanyInfo: null,
-        createdAt: detectionTime
-      });
-    }
-
-    // 构建返回数据（完整报告 - 预留审核通过状态使用）
+    // 构建返回数据（完整报告 - 审核通过后可见）
     return NextResponse.json({
       basicInfo,
       riskLevel: extractFeishuText(fields['综合风险等级']) || overallLevel,
