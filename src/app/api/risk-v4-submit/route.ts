@@ -1059,7 +1059,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    sendFeishuNotification({
+    await sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
@@ -1210,7 +1210,7 @@ async function processLegacySubmission(body: Record<string, unknown>, riskId: st
   // 写入飞书并发送通知
   const feishuResult = await writeToFeishu(fields);
   if (feishuResult.success) {
-    sendFeishuNotification({
+    await sendFeishuNotification({
       riskId,
       companyName: String(fields['企业名称'] || ''),
       contactName: String(fields['联系人'] || ''),
