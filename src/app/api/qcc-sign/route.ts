@@ -27,7 +27,16 @@ function generateQccToken() {
 export async function GET(request: NextRequest) {
   try {
     const { token, timespan, appKey } = generateQccToken();
-    
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get('format');
+
+    // 纯文本格式：前32位token + 后10位timespan，方便飞书用LEFT/RIGHT截取
+    if (format === 'simple') {
+      return new NextResponse(token + timespan, {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       token,
