@@ -326,7 +326,7 @@ export async function GET(request: NextRequest) {
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: '慧根堂财税风险咨询 · 专业财税风控服务', size: 18, color: 'aaa' })]
+            children: [new TextRun({ text: '慧根堂财税风险咨询 · 专业财税风控服务', size: 18, color: 'aaaaaa' })]
           }),
 
           // ========== 一、企业基本信息 ==========
