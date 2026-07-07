@@ -36,6 +36,17 @@ export async function GET(request: NextRequest) {
     // 单字段纯文本返回：飞书自动化直接引用body，无需截取
     // ?field=timespan → 返回10位时间戳
     // ?field=token&timespan=xxx → 根据指定timespan计算token，返回32位
+    // ?field=debug&timespan=xxx → 调试用，返回接收到的参数和计算结果
+    if (field === 'debug') {
+      return NextResponse.json({
+        received_timespan: inputTimespan,
+        received_timespan_length: inputTimespan?.length,
+        received_timespan_encoded: encodeURIComponent(inputTimespan || ''),
+        calculated_token: token,
+        calculated_token_length: token.length,
+        app_key: QCC_APP_KEY,
+      });
+    }
     if (field === 'token') {
       return new NextResponse(token, {
         headers: { 'Content-Type': 'text/plain' },
