@@ -151,8 +151,8 @@ async function fetchQccDetail(companyName: string): Promise<Record<string, any> 
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
-const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || 'MQEcbOxiealqEyshlY1cRZV2nPf';
-const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || 'tblhY9GXFXUdlR83';
+const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || 'Z006bk7yuaxWalsdqoeck3mBnTb';
+const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || 'tblYYxtHDeBAx15j';
 
 // 行业基准数据（key兼容前端下拉值和后端原有值）
 const INDUSTRY_BENCHMARKS: Record<string, {
