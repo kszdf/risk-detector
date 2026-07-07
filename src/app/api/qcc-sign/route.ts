@@ -37,11 +37,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 飞书专用格式：返回JSON字符串（Content-Type=application/json），body是42位拼接字符串
-    // 飞书JSON格式下body直接是字符串，可用LEFT/RIGHT截取token和timespan
+    // 飞书专用格式：返回标准JSON对象，飞书自动化可直接引用字段
+    // 比 LEFT/RIGHT 截取更可靠，同时保留 body 字段兼容旧用法
     if (format === 'feishu') {
-      return new NextResponse(JSON.stringify(token + timespan), {
-        headers: { 'Content-Type': 'application/json' },
+      const body = token + timespan;
+      return NextResponse.json({
+        token,
+        timespan,
+        appKey: QCC_APP_KEY,
+        body,
       });
     }
 
