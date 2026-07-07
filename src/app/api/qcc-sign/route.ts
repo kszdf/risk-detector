@@ -37,15 +37,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 飞书专用格式：返回标准JSON对象，飞书自动化可直接引用字段
-    // 比 LEFT/RIGHT 截取更可靠，同时保留 body 字段兼容旧用法
+    // 飞书专用格式：返回JSON字符串（顶层就是字符串），飞书JSON格式下body是纯文本
+    // 飞书用 LEFT([步骤返回值].body, 32) 取token，RIGHT([步骤返回值].body, 10) 取timespan
     if (format === 'feishu') {
-      const body = token + timespan;
-      return NextResponse.json({
-        token,
-        timespan,
-        appKey: QCC_APP_KEY,
-        body,
+      return new NextResponse(JSON.stringify(token + timespan), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
