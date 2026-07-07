@@ -15,8 +15,8 @@ const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, 'af2b3e9c39a64a2c9a926e
 const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, 'CABF5EE954826B72B15A7D7DE41979D9');
 
 // 生成企查查API签名Token
-function generateQccToken() {
-  const timespan = Math.floor(Date.now() / 1000).toString();
+function generateQccToken(inputTimespan?: string | null) {
+  const timespan = inputTimespan || Math.floor(Date.now() / 1000).toString();
   const token = crypto.createHash('md5')
     .update(QCC_APP_KEY + timespan + QCC_SECRET_KEY)
     .digest('hex')
@@ -26,9 +26,26 @@ function generateQccToken() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { token, timespan, appKey } = generateQccToken();
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format');
+    const field = searchParams.get('field');
+    const inputTimespan = searchParams.get('timespan');
+
+    const { token, timespan, appKey } = generateQccToken(inputTimespan);
+
+    // 单字段纯文本返回：飞书自动化直接引用body，无需截取
+    // ?field=timespan → 返回10位时间戳
+    // ?field=token&timespan=xxx → 根据指定timespan计算token，返回32位
+    if (field === 'token') {
+      return new NextResponse(token, {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+    if (field === 'timespan') {
+      return new NextResponse(timespan, {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
 
     // 纯文本格式：前32位token + 后10位timespan，方便飞书用LEFT/RIGHT截取
     if (format === 'simple') {
