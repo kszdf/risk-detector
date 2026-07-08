@@ -174,6 +174,62 @@ function createDataCell(text: string, options: { align?: 'center' | 'left' | 'ri
   });
 }
 
+// 创建带差异高亮的单元格（用于变更记录对比）
+function createDiffCell(mainText: string, compareText: string, isAfter: boolean): TableCell {
+  if (!mainText) return createDataCell('-', { size: 18, color: '888888' } as any);
+  
+  // 按分号分割成条目
+  const mainItems = mainText.split(/[；;]/).filter(s => s.trim());
+  const compItems = compareText.split(/[；;]/).filter(s => s.trim());
+  
+  // 如果条目太少（无法有效对比），直接返回全文
+  if (mainItems.length <= 1 && compItems.length <= 1) {
+    return createDataCell(mainText, {
+      size: 18,
+      color: isAfter ? '2b6cb0' : '888888'
+    } as any);
+  }
+  
+  // 提取每条的键名（冒号前部分）
+  const extractKey = (item: string): string => {
+    const idx = item.indexOf('：');
+    const idx2 = item.indexOf(':');
+    const cutIdx = idx >= 0 ? idx : (idx2 >= 0 ? idx2 : -1);
+    return cutIdx >= 0 ? item.substring(0, cutIdx).trim() : item.trim();
+  };
+  
+  // 建立对比端的 key→value 映射
+  const compMap = new Map<string, string>();
+  compItems.forEach(item => {
+    const key = extractKey(item);
+    if (key) compMap.set(key, item.trim());
+  });
+  
+  // 生成带样式的 TextRun 数组
+  const runs: TextRun[] = [];
+  mainItems.forEach((item, i) => {
+    const key = extractKey(item);
+    const compItem = key ? compMap.get(key) : undefined;
+    const isChanged = !compItem || compItem !== item.trim();
+    
+    runs.push(new TextRun({
+      text: item.trim() + (i < mainItems.length - 1 ? '；' : ''),
+      size: 18,
+      color: isChanged ? (isAfter ? 'DC2626' : '666666') : (isAfter ? '2b6cb0' : '999999'),
+      bold: isChanged && isAfter,
+      highlight: isChanged ? 'yellow' : undefined
+    }));
+  });
+  
+  return new TableCell({
+    children: [new Paragraph({
+      alignment: AlignmentType.LEFT,
+      spacing: { line: 276 },
+      children: runs
+    })]
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -1012,14 +1068,18 @@ export async function GET(request: NextRequest) {
               createHeaderCell('变更后')
             ]
           }),
-          ...changeItems.map((c: any) => new TableRow({
-            children: [
-              createDataCell(c.changeDate || '-', { align: 'center' }),
-              createDataCell(c.projectName || c.changeSubject || '-', { bold: true }),
-              createDataCell((c.before || '').substring(0, 60), { size: 18, color: '888888' }),
-              createDataCell((c.after || '').substring(0, 60), { size: 18, color: '2b6cb0' })
-            ]
-          }))
+          ...changeItems.map((c: any) => {
+            const beforeText = c.before || '';
+            const afterText = c.after || '';
+            return new TableRow({
+              children: [
+                createDataCell(c.changeDate || '-', { align: 'center' }),
+                createDataCell(c.projectName || c.changeSubject || '-', { bold: true }),
+                createDiffCell(beforeText, afterText, false),
+                createDiffCell(afterText, beforeText, true)
+              ]
+            });
+          })
         ];
         sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
         if (risk.changes.length > 10) {
