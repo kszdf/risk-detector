@@ -570,8 +570,14 @@ export async function GET(req: NextRequest) {
     };
 
     // 提取企查查工商信息（字段名转换：企查查首字母大写 -> 小驼峰）
+    // 兼容两种格式：旧格式（Result）/ 新格式（basicInfo + annualReport）
     const rawQccInfo = extractJsonField(fields['工商信息']);
-    const qccCompanyInfo = rawQccInfo?.Result ? transformQccInfo(rawQccInfo.Result) : null;
+    const basicResult = rawQccInfo?.basicInfo || rawQccInfo?.Result || null;
+    const qccCompanyInfo = basicResult ? transformQccInfo(basicResult) : null;
+
+    // 提取年报数据（新格式才有）
+    const annualReportData = rawQccInfo?.annualReport || [];
+    const annualReport = annualReportData.length > 0 ? transformAnnualReport(annualReportData) : null;
 
     function transformQccInfo(result: any) {
       if (!result) return null;
@@ -607,6 +613,94 @@ export async function GET(req: NextRequest) {
         imageUrl: result.ImageUrl || '',
         originalName: Array.isArray(result.OriginalName) ? result.OriginalName : [],
         keyNo: result.KeyNo || ''
+      };
+    }
+
+    // 转换年报数据（取最新一年有详细信息的）
+    function transformAnnualReport(reportList: any[]) {
+      if (!reportList || reportList.length === 0) return null;
+      
+      // 取最新一年有详细信息的年报
+      const latest = reportList.find((r: any) => r.HasDetailInfo === 'True' || r.HasDetailInfo === true) 
+        || reportList[0];
+      
+      if (!latest) return null;
+      
+      const basic = latest.BasicInfoData || {};
+      const assets = latest.AssetsData || {};
+      const social = latest.SocialInsurance || {};
+      const partners = latest.PartnerList || [];
+      const investments = latest.InvestInfoList || [];
+      const stockChanges = latest.StockChangeList || [];
+      const websites = latest.WebSiteList || [];
+      const changes = latest.ChangeList || [];
+      
+      return {
+        year: latest.Year || '',
+        publishDate: latest.PublishDate ? latest.PublishDate.split(' ')[0] : '',
+        // 基本信息
+        employeeCount: basic.EmployeeCount || '',
+        hasWebSite: basic.HasWebSite || '',
+        hasInvestment: basic.HasNewStockOrByStock || '',
+        hasStockTransfer: basic.IsStockRightTransfer || '',
+        hasAssurance: basic.HasProvideAssurance || '',
+        status: basic.Status || '',
+        // 资产财务数据
+        totalAssets: assets.TotalAssets || '',
+        totalEquity: assets.TotalOwnersEquity || '',
+        totalLiabilities: assets.TotalLiabilities || '',
+        revenue: assets.GrossTradingIncome || '',
+        mainBusinessIncome: assets.MainBusinessIncome || '',
+        totalProfit: assets.TotalProfit || '',
+        netProfit: assets.NetProfit || '',
+        totalTax: assets.TotalTaxAmount || '',
+        bankingCredit: assets.BankingCredit || '',
+        governmentSubsidy: assets.GovernmentSubsidy || '',
+        // 股东出资
+        partners: partners.map((p: any) => ({
+          name: p.Name || '',
+          shouldCapi: p.ShouldCapi || '',
+          shouldDate: p.ShouldDate || '',
+          shouldType: p.ShouldType || '',
+          realCapi: p.RealCapi || '',
+          realDate: p.RealDate || '',
+          realType: p.RealType || ''
+        })),
+        // 对外投资
+        investments: investments.map((i: any) => ({
+          name: i.Name || '',
+          regNo: i.RegNo || '',
+          shouldCapi: i.ShouldCapi || '',
+          shareholdingRatio: i.ShareholdingRatio || ''
+        })),
+        // 股权变更
+        stockChanges: stockChanges.map((s: any) => ({
+          name: s.Name || '',
+          before: s.Before || '',
+          after: s.After || '',
+          changeDate: s.ChangeDate ? s.ChangeDate.split(' ')[0] : ''
+        })),
+        // 网站网店
+        websites: websites.map((w: any) => ({
+          type: w.Type || '',
+          name: w.Name || '',
+          webSite: w.WebSite || ''
+        })),
+        // 工商变更记录
+        changes: changes.map((c: any) => ({
+          changeName: c.ChangeName || '',
+          before: c.Before || '',
+          after: c.After || '',
+          changeDate: c.ChangeDate ? c.ChangeDate.split(' ')[0] : ''
+        })),
+        // 社保信息
+        socialInsurance: {
+          urbanBasicIns: social.UrbanBasicIns || '',
+          employeeBasicIns: social.EmployeeBasicIns || '',
+          maternityIns: social.MaternityIns || '',
+          unemploymentIns: social.UnemploymentIns || '',
+          industrialInjuryIns: social.IndustrialInjuryIns || ''
+        }
       };
     }
 
@@ -771,6 +865,7 @@ export async function GET(req: NextRequest) {
         reportStatus: finalReportStatus,
         mainRiskAreas,
         qccCompanyInfo,
+        annualReport,
         isAdmin: true,
         reportContent: {
           overview: {
@@ -847,6 +942,7 @@ export async function GET(req: NextRequest) {
       reportStatus: finalReportStatus,
       mainRiskAreas,
       qccCompanyInfo,
+      annualReport,
       reportContent: {
         overview: {
           riskId,

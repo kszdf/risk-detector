@@ -249,9 +249,14 @@ export async function GET(request: NextRequest) {
     const reportContent = extractJsonField(record['报告内容']);
     const financialIndicators = extractJsonField(record['财务指标']);
     const crossValidation = extractJsonField(record['交叉验证结果']);
-    // 提取并转换企查查工商信息（字段名转换：首字母大写 -> 小驼峰）
+    // 提取并转换企查查工商信息（兼容新旧格式：旧Result / 新basicInfo + annualReport）
     const rawBusinessInfo = extractJsonField(record['工商信息']);
-    const businessInfo = rawBusinessInfo?.Result ? transformQccInfo(rawBusinessInfo.Result) : null;
+    const basicResult = rawBusinessInfo?.basicInfo || rawBusinessInfo?.Result || null;
+    const businessInfo = basicResult ? transformQccInfo(basicResult) : null;
+    
+    // 提取年报数据（新格式才有）
+    const annualReportList = rawBusinessInfo?.annualReport || [];
+    const annualReport = annualReportList.length > 0 ? transformAnnualReport(annualReportList) : null;
 
     function transformQccInfo(result: any) {
       if (!result) return null;
@@ -269,13 +274,97 @@ export async function GET(request: NextRequest) {
         termStart: result.TermStart ? result.TermStart.split(' ')[0] : '',
         termEnd: result.TermEnd ? result.TermEnd.split(' ')[0] : '',
         econKind: result.EconKind || '',
+        entType: result.EntType || '',
         belongOrg: result.BelongOrg || '',
         province: result.Province || '',
+        areaCode: result.AreaCode || '',
         address: result.Address || '',
         scope: result.Scope || '',
         isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1',
+        stockNumber: result.StockNumber || '',
+        stockType: result.StockType || '',
         originalName: Array.isArray(result.OriginalName) ? result.OriginalName : [],
         imageUrl: result.ImageUrl || ''
+      };
+    }
+
+    // 转换年报数据（取最新一年有详细信息的）
+    function transformAnnualReport(reportList: any[]) {
+      if (!reportList || reportList.length === 0) return null;
+      
+      const latest = reportList.find((r: any) => r.HasDetailInfo === 'True' || r.HasDetailInfo === true) 
+        || reportList[0];
+      
+      if (!latest) return null;
+      
+      const basic = latest.BasicInfoData || {};
+      const assets = latest.AssetsData || {};
+      const social = latest.SocialInsurance || {};
+      const partners = latest.PartnerList || [];
+      const investments = latest.InvestInfoList || [];
+      const stockChanges = latest.StockChangeList || [];
+      const websites = latest.WebSiteList || [];
+      const changes = latest.ChangeList || [];
+      
+      return {
+        year: latest.Year || '',
+        publishDate: latest.PublishDate ? latest.PublishDate.split(' ')[0] : '',
+        employeeCount: basic.EmployeeCount || '',
+        hasWebSite: basic.HasWebSite || '',
+        status: basic.Status || '',
+        // 财务数据
+        totalAssets: assets.TotalAssets || '',
+        totalEquity: assets.TotalOwnersEquity || '',
+        totalLiabilities: assets.TotalLiabilities || '',
+        revenue: assets.GrossTradingIncome || '',
+        mainBusinessIncome: assets.MainBusinessIncome || '',
+        totalProfit: assets.TotalProfit || '',
+        netProfit: assets.NetProfit || '',
+        totalTax: assets.TotalTaxAmount || '',
+        governmentSubsidy: assets.GovernmentSubsidy || '',
+        // 股东出资
+        partners: partners.map((p: any) => ({
+          name: p.Name || '',
+          shouldCapi: p.ShouldCapi || '',
+          shouldDate: p.ShouldDate || '',
+          shouldType: p.ShouldType || '',
+          realCapi: p.RealCapi || '',
+          realDate: p.RealDate || '',
+          realType: p.RealType || ''
+        })),
+        // 对外投资
+        investments: investments.map((i: any) => ({
+          name: i.Name || '',
+          regNo: i.RegNo || ''
+        })),
+        // 股权变更
+        stockChanges: stockChanges.map((s: any) => ({
+          name: s.Name || '',
+          before: s.Before || '',
+          after: s.After || '',
+          changeDate: s.ChangeDate ? s.ChangeDate.split(' ')[0] : ''
+        })),
+        // 网站
+        websites: websites.map((w: any) => ({
+          type: w.Type || '',
+          name: w.Name || '',
+          webSite: w.WebSite || ''
+        })),
+        // 工商变更
+        changes: changes.map((c: any) => ({
+          changeName: c.ChangeName || '',
+          before: c.Before || '',
+          after: c.After || '',
+          changeDate: c.ChangeDate ? c.ChangeDate.split(' ')[0] : ''
+        })),
+        // 社保
+        socialInsurance: {
+          urbanBasicIns: social.UrbanBasicIns || '',
+          employeeBasicIns: social.EmployeeBasicIns || '',
+          maternityIns: social.MaternityIns || '',
+          unemploymentIns: social.UnemploymentIns || '',
+          industrialInjuryIns: social.IndustrialInjuryIns || ''
+        }
       };
     }
 
@@ -417,6 +506,114 @@ export async function GET(request: NextRequest) {
       return rows;
     }
 
+    // 判断是否有有效的年报财务数据
+    function hasAnnualFinancialData(report: any): boolean {
+      if (!report) return false;
+      const fields = ['totalAssets', 'revenue', 'totalProfit', 'netProfit', 'totalTax', 'totalLiabilities', 'totalEquity'];
+      return fields.some(f => report[f] && report[f] !== '-' && report[f] !== '企业选择不公示' && report[f] !== '');
+    }
+
+    // 构建年报财务数据表格行
+    function buildAnnualFinanceRows(report: any): TableRow[] {
+      const rows: TableRow[] = [];
+      const items: [string, string][] = [
+        ['资产总额', report.totalAssets],
+        ['负债总额', report.totalLiabilities],
+        ['所有者权益合计', report.totalEquity],
+        ['营业总收入', report.revenue],
+        ['利润总额', report.totalProfit],
+        ['净利润', report.netProfit],
+        ['纳税总额', report.totalTax],
+        ['政府补助', report.governmentSubsidy]
+      ];
+
+      const validItems = items.filter(([, val]) => val && val !== '-' && val !== '企业选择不公示' && val !== '');
+      
+      // 两两一行显示
+      for (let i = 0; i < validItems.length; i += 2) {
+        const [label1, val1] = validItems[i];
+        const [label2, val2] = validItems[i + 1] || ['', ''];
+        
+        if (validItems[i + 1]) {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(label1),
+              createDataCell(val1, { align: 'center' }),
+              createHeaderCell(label2),
+              createDataCell(val2, { align: 'center' })
+            ]
+          }));
+        } else {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(label1),
+              new TableCell({
+                columnSpan: 3,
+                children: [new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: val1, size: 20 })]
+                })]
+              })
+            ]
+          }));
+        }
+      }
+
+      return rows;
+    }
+
+    // 判断是否有社保数据
+    function hasSocialInsuranceData(social: any): boolean {
+      if (!social) return false;
+      const fields = ['urbanBasicIns', 'employeeBasicIns', 'maternityIns', 'unemploymentIns', 'industrialInjuryIns'];
+      return fields.some(f => social[f] && social[f] !== '-' && social[f] !== '');
+    }
+
+    // 构建社保信息表格行
+    function buildAnnualSocialRows(social: any): TableRow[] {
+      const rows: TableRow[] = [];
+      const items: [string, string][] = [
+        ['养老保险', social.urbanBasicIns],
+        ['医疗保险', social.employeeBasicIns],
+        ['失业保险', social.unemploymentIns],
+        ['工伤保险', social.industrialInjuryIns],
+        ['生育保险', social.maternityIns]
+      ];
+
+      const validItems = items.filter(([, val]) => val && val !== '-' && val !== '');
+
+      for (let i = 0; i < validItems.length; i += 2) {
+        const [label1, val1] = validItems[i];
+        const [label2, val2] = validItems[i + 1] || ['', ''];
+        
+        if (validItems[i + 1]) {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(label1),
+              createDataCell(val1, { align: 'center' }),
+              createHeaderCell(label2),
+              createDataCell(val2, { align: 'center' })
+            ]
+          }));
+        } else {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(label1),
+              new TableCell({
+                columnSpan: 3,
+                children: [new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: val1, size: 20 })]
+                })]
+              })
+            ]
+          }));
+        }
+      }
+
+      return rows;
+    }
+
     const { color: riskColor } = getRiskLevel(totalScore);
 
     // 读取LOGO图片
@@ -537,6 +734,118 @@ export async function GET(request: NextRequest) {
               width: { size: 100, type: WidthType.PERCENTAGE },
               rows: buildBusinessInfoRows(businessInfo)
             })
+          ] : []),
+
+          // 年报信息（如果有）
+          ...(annualReport ? [
+            createHeading2(`年报数据（${annualReport.year || '最新'}）`),
+            createParagraph(`数据来源：企业工商公示年报，发布日期：${annualReport.publishDate || '未公示'}`, { size: 18, color: '888888' }),
+
+            // 年报财务数据
+            ...(hasAnnualFinancialData(annualReport) ? [
+              new Paragraph({ spacing: { before: 200, after: 100 }, children: [] }),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: buildAnnualFinanceRows(annualReport)
+              })
+            ] : []),
+
+            // 股东出资信息
+            ...(annualReport.partners && annualReport.partners.length > 0 ? [
+              new Paragraph({ spacing: { before: 300, after: 100 }, children: [] }),
+              createHeading2('股东及出资信息'),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                  new TableRow({
+                    children: [
+                      createHeaderCell('股东名称'),
+                      createHeaderCell('认缴出资额'),
+                      createHeaderCell('认缴时间'),
+                      createHeaderCell('实缴出资额'),
+                      createHeaderCell('实缴时间')
+                    ]
+                  }),
+                  ...annualReport.partners.map((p: any) => new TableRow({
+                    children: [
+                      createDataCell(p.name || '-'),
+                      createDataCell(p.shouldCapi ? p.shouldCapi + '万元' : '-', { align: 'center' }),
+                      createDataCell(p.shouldDate || '-', { align: 'center' }),
+                      createDataCell(p.realCapi ? p.realCapi + '万元' : '-', { align: 'center' }),
+                      createDataCell(p.realDate || '-', { align: 'center' })
+                    ]
+                  }))
+                ]
+              })
+            ] : []),
+
+            // 社保缴纳信息
+            ...(hasSocialInsuranceData(annualReport.socialInsurance) ? [
+              new Paragraph({ spacing: { before: 300, after: 100 }, children: [] }),
+              createHeading2('社保缴纳信息'),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: buildAnnualSocialRows(annualReport.socialInsurance)
+              })
+            ] : []),
+
+            // 对外投资信息
+            ...(annualReport.investments && annualReport.investments.length > 0 ? [
+              new Paragraph({ spacing: { before: 300, after: 100 }, children: [] }),
+              createHeading2('对外投资信息'),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                  new TableRow({
+                    children: [
+                      createHeaderCell('序号'),
+                      createHeaderCell('被投资企业名称'),
+                      createHeaderCell('统一社会信用代码/注册号')
+                    ]
+                  }),
+                  ...annualReport.investments.map((inv: any, idx: number) => new TableRow({
+                    children: [
+                      createDataCell(String(idx + 1), { align: 'center' }),
+                      createDataCell(inv.name || '-'),
+                      createDataCell(inv.regNo || '-', { align: 'center' })
+                    ]
+                  }))
+                ]
+              })
+            ] : []),
+
+            // 股权变更信息
+            ...(annualReport.stockChanges && annualReport.stockChanges.length > 0 ? [
+              new Paragraph({ spacing: { before: 300, after: 100 }, children: [] }),
+              createHeading2('股权变更信息'),
+              new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: [
+                  new TableRow({
+                    children: [
+                      createHeaderCell('股东'),
+                      createHeaderCell('变更前比例'),
+                      createHeaderCell('变更后比例'),
+                      createHeaderCell('变更日期')
+                    ]
+                  }),
+                  ...annualReport.stockChanges.map((s: any) => new TableRow({
+                    children: [
+                      createDataCell(s.name || '-'),
+                      createDataCell(s.before || '-', { align: 'center' }),
+                      createDataCell(s.after || '-', { align: 'center' }),
+                      createDataCell(s.changeDate || '-', { align: 'center' })
+                    ]
+                  }))
+                ]
+              })
+            ] : []),
+
+            // 从业人数等补充信息
+            ...(annualReport.employeeCount && annualReport.employeeCount !== '企业选择不公示' ? [
+              new Paragraph({ spacing: { before: 200, after: 100 }, children: [] }),
+              createInfoRow('从业人数', annualReport.employeeCount)
+            ] : [])
           ] : []),
 
           // ========== 二、风险概览 ==========
