@@ -569,8 +569,46 @@ export async function GET(req: NextRequest) {
       creditCode: extractFeishuText(fields['统一信用代码'])
     };
 
-    // 提取企查查工商信息
-    const qccCompanyInfo = extractJsonField(fields['工商信息']);
+    // 提取企查查工商信息（字段名转换：企查查首字母大写 -> 小驼峰）
+    const rawQccInfo = extractJsonField(fields['工商信息']);
+    const qccCompanyInfo = rawQccInfo?.Result ? transformQccInfo(rawQccInfo.Result) : null;
+
+    function transformQccInfo(result: any) {
+      if (!result) return null;
+      return {
+        // 基础信息
+        name: result.Name || '',
+        status: result.Status || '',
+        creditCode: result.CreditCode || '',
+        regNo: result.No || '',
+        orgNo: result.OrgNo || '',
+        operName: result.OperName || '',
+        // 资本信息
+        registCapi: result.RegistCapi || '',
+        paidUpCapital: result.PaidUpCapital ? (result.PaidUpCapital + (result.PaidUpCapitalUnit || '') + (result.PaidUpCapitalCCY === 'CNY' ? '元人民币' : '')) : '',
+        // 时间信息
+        startDate: result.StartDate ? result.StartDate.split(' ')[0] : '',
+        checkDate: result.CheckDate ? result.CheckDate.split(' ')[0] : '',
+        termStart: result.TermStart ? result.TermStart.split(' ')[0] : '',
+        termEnd: result.TermEnd ? result.TermEnd.split(' ')[0] : '',
+        // 企业属性
+        econKind: result.EconKind || '',
+        entType: result.EntType || '',
+        belongOrg: result.BelongOrg || '',
+        province: result.Province || '',
+        areaCode: result.AreaCode || '',
+        address: result.Address || '',
+        scope: result.Scope || '',
+        // 上市信息
+        isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1',
+        stockNumber: result.StockNumber || '',
+        stockType: result.StockType || '',
+        // 其他
+        imageUrl: result.ImageUrl || '',
+        originalName: Array.isArray(result.OriginalName) ? result.OriginalName : [],
+        keyNo: result.KeyNo || ''
+      };
+    }
 
     // 提取财务数据（从独立字段）
     const revenue = getNumber(fields['营业收入(万元)']);

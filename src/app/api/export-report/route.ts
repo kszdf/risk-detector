@@ -249,7 +249,33 @@ export async function GET(request: NextRequest) {
     const reportContent = extractJsonField(record['报告内容']);
     const financialIndicators = extractJsonField(record['财务指标']);
     const crossValidation = extractJsonField(record['交叉验证结果']);
-    const businessInfo = extractJsonField(record['工商信息']);
+    // 提取并转换企查查工商信息（字段名转换：首字母大写 -> 小驼峰）
+    const rawBusinessInfo = extractJsonField(record['工商信息']);
+    const businessInfo = rawBusinessInfo?.Result ? transformQccInfo(rawBusinessInfo.Result) : null;
+
+    function transformQccInfo(result: any) {
+      if (!result) return null;
+      return {
+        name: result.Name || '',
+        status: result.Status || '',
+        creditCode: result.CreditCode || '',
+        regNo: result.No || '',
+        orgNo: result.OrgNo || '',
+        operName: result.OperName || '',
+        registCapi: result.RegistCapi || '',
+        paidUpCapital: result.PaidUpCapital ? (result.PaidUpCapital + (result.PaidUpCapitalUnit || '') + (result.PaidUpCapitalCCY === 'CNY' ? '元人民币' : '')) : '',
+        startDate: result.StartDate ? result.StartDate.split(' ')[0] : '',
+        checkDate: result.CheckDate ? result.CheckDate.split(' ')[0] : '',
+        termStart: result.TermStart ? result.TermStart.split(' ')[0] : '',
+        termEnd: result.TermEnd ? result.TermEnd.split(' ')[0] : '',
+        econKind: result.EconKind || '',
+        belongOrg: result.BelongOrg || '',
+        province: result.Province || '',
+        address: result.Address || '',
+        scope: result.Scope || '',
+        isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1'
+      };
+    }
 
     const { color: riskColor } = getRiskLevel(totalScore);
 
@@ -382,16 +408,46 @@ export async function GET(request: NextRequest) {
                   children: [
                     createHeaderCell('注册资本'),
                     createDataCell(businessInfo.registCapi || '-', { align: 'center' }),
-                    createHeaderCell('法定代表人'),
-                    createDataCell(businessInfo.operName || '-', { align: 'center' })
+                    createHeaderCell('实缴资本'),
+                    createDataCell(businessInfo.paidUpCapital || '-', { align: 'center' })
                   ]
                 }),
                 new TableRow({
                   children: [
+                    createHeaderCell('法定代表人'),
+                    createDataCell(businessInfo.operName || '-', { align: 'center' }),
                     createHeaderCell('企业类型'),
-                    createDataCell(businessInfo.econKind || '-', { align: 'center' }),
-                    createHeaderCell('所属地区'),
-                    createDataCell(businessInfo.province || '-', { align: 'center' })
+                    createDataCell(businessInfo.econKind || '-', { align: 'center' })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createHeaderCell('统一社会信用代码'),
+                    createDataCell(businessInfo.creditCode || '-', { align: 'center' }),
+                    createHeaderCell('注册号'),
+                    createDataCell(businessInfo.regNo || '-', { align: 'center' })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createHeaderCell('登记机关'),
+                    createDataCell(businessInfo.belongOrg || '-', { align: 'center' }),
+                    createHeaderCell('核准日期'),
+                    createDataCell(businessInfo.checkDate || '-', { align: 'center' })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    createHeaderCell('营业期限'),
+                    new TableCell({
+                      columnSpan: 3,
+                      children: [new Paragraph({
+                        children: [new TextRun({
+                          text: (businessInfo.termStart || '-') + ' 至 ' + (businessInfo.termEnd || '长期'),
+                          size: 20
+                        })]
+                      })]
+                    })
                   ]
                 }),
                 new TableRow({
