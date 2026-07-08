@@ -1955,6 +1955,73 @@ export async function GET(request: NextRequest) {
             ]
           }),
 
+          // 风险项逐条列示（带税收政策）
+          new Paragraph({ spacing: { before: 400, after: 100 }, children: [] }),
+          createHeading2('风险项明细与政策依据'),
+          
+          // 高风险项逐条列示
+          ...(reportContent?.highRiskItems?.length ? [
+            new Paragraph({
+              spacing: { before: 200, after: 100 },
+              children: [new TextRun({ text: '🔴 高风险项', bold: true, size: 22, color: RISK_COLORS.high.text })]
+            }),
+            ...(reportContent.highRiskItems.flatMap((item: any, idx: number) => [
+              new Paragraph({
+                spacing: { after: 40, left: 200 },
+                children: [
+                  new TextRun({ text: `${idx + 1}. ${item.name || ''}`, bold: true, size: 20, color: RISK_COLORS.high.text }),
+                  new TextRun({ text: `  [${item.moduleName || ''}]`, size: 18, color: '888888' }),
+                ]
+              }),
+              new Paragraph({
+                spacing: { after: 120, left: 400 },
+                children: [
+                  new TextRun({ text: '涉嫌政策：', bold: true, size: 18, color: '666666' }),
+                  new TextRun({ text: item.taxPolicy || '-', size: 18, color: '555555' })
+                ]
+              })
+            ]))
+          ] : []),
+
+          // 中风险项逐条列示
+          ...(reportContent?.mediumRiskItems?.length ? [
+            new Paragraph({
+              spacing: { before: 200, after: 100 },
+              children: [new TextRun({ text: '🟡 中风险项', bold: true, size: 22, color: RISK_COLORS.medium.text })]
+            }),
+            ...(reportContent.mediumRiskItems.flatMap((item: any, idx: number) => [
+              new Paragraph({
+                spacing: { after: 40, left: 200 },
+                children: [
+                  new TextRun({ text: `${idx + 1}. ${item.name || ''}`, bold: true, size: 20, color: RISK_COLORS.medium.text }),
+                  new TextRun({ text: `  [${item.moduleName || ''}]`, size: 18, color: '888888' }),
+                ]
+              }),
+              new Paragraph({
+                spacing: { after: 120, left: 400 },
+                children: [
+                  new TextRun({ text: '涉嫌政策：', bold: true, size: 18, color: '666666' }),
+                  new TextRun({ text: item.taxPolicy || '-', size: 18, color: '555555' })
+                ]
+              })
+            ]))
+          ] : []),
+
+          // 低风险项（简要列示）
+          ...(reportContent?.lowRiskItems?.length ? [
+            new Paragraph({
+              spacing: { before: 200, after: 100 },
+              children: [new TextRun({ text: '🟢 合规项（无风险）', bold: true, size: 22, color: RISK_COLORS.low.text })]
+            }),
+            new Paragraph({
+              spacing: { after: 100, left: 200 },
+              children: [
+                new TextRun({ text: `共 ${reportContent.lowRiskItems.length} 项合规：`, size: 19, color: '555555' }),
+                new TextRun({ text: reportContent.lowRiskItems.join('、'), size: 19, color: RISK_COLORS.low.text })
+              ]
+            })
+          ] : []),
+
           // ========== 三、详细风险分析 ==========
           createHeading1('三、详细风险分析'),
 
