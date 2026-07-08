@@ -273,8 +273,148 @@ export async function GET(request: NextRequest) {
         province: result.Province || '',
         address: result.Address || '',
         scope: result.Scope || '',
-        isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1'
+        isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1',
+        originalName: Array.isArray(result.OriginalName) ? result.OriginalName : [],
+        imageUrl: result.ImageUrl || ''
       };
+    }
+
+    // 动态生成工商信息表格行（有数据才显示）
+    function buildBusinessInfoRows(info: any): TableRow[] {
+      const rows: TableRow[] = [];
+      const pairs: [string, string, string, string][] = [
+        // [左标签, 左值, 右标签, 右值]
+        ['登记状态', info.status, '成立日期', info.startDate],
+        ['法定代表人', info.operName, '企业类型', info.econKind],
+        ['注册资本', info.registCapi, '实缴资本', info.paidUpCapital],
+        ['统一社会信用代码', info.creditCode, '注册号', info.regNo],
+        ['组织机构代码', info.orgNo, '所属省份', info.province === 'JS' ? '江苏省' : info.province],
+        ['登记机关', info.belongOrg, '核准日期', info.checkDate],
+      ];
+
+      for (const [leftLabel, leftVal, rightLabel, rightVal] of pairs) {
+        const hasLeft = leftVal && leftVal !== '-';
+        const hasRight = rightVal && rightVal !== '-';
+        if (!hasLeft && !hasRight) continue;
+
+        if (hasLeft && hasRight) {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(leftLabel),
+              createDataCell(leftVal, { align: 'center' }),
+              createHeaderCell(rightLabel),
+              createDataCell(rightVal, { align: 'center' })
+            ]
+          }));
+        } else if (hasLeft) {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(leftLabel),
+              new TableCell({
+                columnSpan: 3,
+                children: [new Paragraph({
+                  children: [new TextRun({ text: leftVal, size: 20 })]
+                })]
+              })
+            ]
+          }));
+        } else {
+          rows.push(new TableRow({
+            children: [
+              createHeaderCell(rightLabel),
+              new TableCell({
+                columnSpan: 3,
+                children: [new Paragraph({
+                  children: [new TextRun({ text: rightVal, size: 20 })]
+                })]
+              })
+            ]
+          }));
+        }
+      }
+
+      // 营业期限
+      if (info.termStart || info.termEnd) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('营业期限'),
+            new TableCell({
+              columnSpan: 3,
+              children: [new Paragraph({
+                children: [new TextRun({
+                  text: (info.termStart || '-') + ' 至 ' + (info.termEnd || '长期'),
+                  size: 20
+                })]
+              })]
+            })
+          ]
+        }));
+      }
+
+      // 曾用名
+      if (info.originalName && info.originalName.length > 0) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('曾用名'),
+            new TableCell({
+              columnSpan: 3,
+              children: [new Paragraph({
+                children: [new TextRun({ text: info.originalName.join(' → '), size: 20, color: '666666' })]
+              })]
+            })
+          ]
+        }));
+      }
+
+      // 上市信息
+      if (info.isOnStock) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('上市状态'),
+            new TableCell({
+              columnSpan: 3,
+              children: [new Paragraph({
+                children: [new TextRun({
+                  text: '已上市' + (info.stockNumber ? ' · 股票代码：' + info.stockNumber : ''),
+                  size: 20
+                })]
+              })]
+            })
+          ]
+        }));
+      }
+
+      // 注册地址
+      if (info.address) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('注册地址'),
+            new TableCell({
+              columnSpan: 3,
+              children: [new Paragraph({
+                children: [new TextRun({ text: info.address, size: 20 })]
+              })]
+            })
+          ]
+        }));
+      }
+
+      // 经营范围
+      if (info.scope) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('经营范围'),
+            new TableCell({
+              columnSpan: 3,
+              children: [new Paragraph({
+                children: [new TextRun({ text: info.scope, size: 19, color: '555555' })]
+              })]
+            })
+          ]
+        }));
+      }
+
+      return rows;
     }
 
     const { color: riskColor } = getRiskLevel(totalScore);
@@ -395,84 +535,7 @@ export async function GET(request: NextRequest) {
             createHeading2('工商登记信息'),
             new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: [
-                new TableRow({
-                  children: [
-                    createHeaderCell('登记状态'),
-                    createDataCell(businessInfo.status || '-', { align: 'center' }),
-                    createHeaderCell('成立日期'),
-                    createDataCell(businessInfo.startDate || '-', { align: 'center' })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('注册资本'),
-                    createDataCell(businessInfo.registCapi || '-', { align: 'center' }),
-                    createHeaderCell('实缴资本'),
-                    createDataCell(businessInfo.paidUpCapital || '-', { align: 'center' })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('法定代表人'),
-                    createDataCell(businessInfo.operName || '-', { align: 'center' }),
-                    createHeaderCell('企业类型'),
-                    createDataCell(businessInfo.econKind || '-', { align: 'center' })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('统一社会信用代码'),
-                    createDataCell(businessInfo.creditCode || '-', { align: 'center' }),
-                    createHeaderCell('注册号'),
-                    createDataCell(businessInfo.regNo || '-', { align: 'center' })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('登记机关'),
-                    createDataCell(businessInfo.belongOrg || '-', { align: 'center' }),
-                    createHeaderCell('核准日期'),
-                    createDataCell(businessInfo.checkDate || '-', { align: 'center' })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('营业期限'),
-                    new TableCell({
-                      columnSpan: 3,
-                      children: [new Paragraph({
-                        children: [new TextRun({
-                          text: (businessInfo.termStart || '-') + ' 至 ' + (businessInfo.termEnd || '长期'),
-                          size: 20
-                        })]
-                      })]
-                    })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('注册地址'),
-                    new TableCell({
-                      columnSpan: 3,
-                      children: [new Paragraph({
-                        children: [new TextRun({ text: businessInfo.address || '-', size: 20 })]
-                      })]
-                    })
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    createHeaderCell('经营范围'),
-                    new TableCell({
-                      columnSpan: 3,
-                      children: [new Paragraph({
-                        children: [new TextRun({ text: businessInfo.scope || '-', size: 19, color: '555555' })]
-                      })]
-                    })
-                  ]
-                })
-              ]
+              rows: buildBusinessInfoRows(businessInfo)
             })
           ] : []),
 
