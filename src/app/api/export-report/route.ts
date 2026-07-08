@@ -249,14 +249,29 @@ export async function GET(request: NextRequest) {
     const reportContent = extractJsonField(record['报告内容']);
     const financialIndicators = extractJsonField(record['财务指标']);
     const crossValidation = extractJsonField(record['交叉验证结果']);
-    // 提取并转换企查查工商信息（兼容新旧格式：旧Result / 新basicInfo + annualReport）
+    // 提取并转换企查查工商信息
+    // 兼容三种格式：旧格式(Result=基础信息) / 410+213格式(basicInfo+annualReport) / 2006合作风险排查格式(Result.VerifyResult+Data)
     const rawBusinessInfo = extractJsonField(record['工商信息']);
-    const basicResult = rawBusinessInfo?.basicInfo || rawBusinessInfo?.Result || null;
-    const businessInfo = basicResult ? transformQccInfo(basicResult) : null;
     
-    // 提取年报数据（新格式才有）
-    const annualReportList = rawBusinessInfo?.annualReport || [];
-    const annualReport = annualReportList.length > 0 ? transformAnnualReport(annualReportList) : null;
+    // 判断是否为2006格式
+    const isRiskScanFormat = rawBusinessInfo?.Result?.VerifyResult !== undefined
+      && rawBusinessInfo?.Result?.Data !== undefined;
+    
+    let businessInfo: any = null;
+    let annualReport: any = null;
+    let riskScanData: any = null;
+    
+    if (isRiskScanFormat) {
+      const riskData = rawBusinessInfo.Result.Data;
+      businessInfo = transformQccInfo(riskData);
+      annualReport = null; // 2006没有详细年报
+      riskScanData = transformRiskScanData(riskData);
+    } else {
+      const basicResult = rawBusinessInfo?.basicInfo || rawBusinessInfo?.Result || null;
+      businessInfo = basicResult ? transformQccInfo(basicResult) : null;
+      const annualReportList = rawBusinessInfo?.annualReport || [];
+      annualReport = annualReportList.length > 0 ? transformAnnualReport(annualReportList) : null;
+    }
 
     function transformQccInfo(result: any) {
       if (!result) return null;
@@ -267,8 +282,13 @@ export async function GET(request: NextRequest) {
         regNo: result.No || '',
         orgNo: result.OrgNo || '',
         operName: result.OperName || '',
+        taxpayerType: result.TaxpayerType || '',
+        personScope: result.PersonScope || '',
+        insuredCount: result.InsuredCount || '',
         registCapi: result.RegistCapi || '',
+        registeredCapital: result.RegisteredCapital || '',
         paidUpCapital: result.PaidUpCapital ? (result.PaidUpCapital + (result.PaidUpCapitalUnit || '') + (result.PaidUpCapitalCCY === 'CNY' ? '元人民币' : '')) : '',
+        realCapi: result.RealCapi || '',
         startDate: result.StartDate ? result.StartDate.split(' ')[0] : '',
         checkDate: result.CheckDate ? result.CheckDate.split(' ')[0] : '',
         termStart: result.TermStart ? result.TermStart.split(' ')[0] : '',
@@ -276,15 +296,304 @@ export async function GET(request: NextRequest) {
         econKind: result.EconKind || '',
         entType: result.EntType || '',
         belongOrg: result.BelongOrg || '',
-        province: result.Province || '',
+        isSmall: result.IsSmall || '',
+        scale: result.Scale || '',
+        companyType: result.CompanyType || '',
         areaCode: result.AreaCode || '',
         address: result.Address || '',
         scope: result.Scope || '',
-        isOnStock: result.IsOnStock === 1 || result.IsOnStock === '1',
-        stockNumber: result.StockNumber || '',
-        stockType: result.StockType || '',
-        originalName: Array.isArray(result.OriginalName) ? result.OriginalName : [],
-        imageUrl: result.ImageUrl || ''
+        province: result.Area?.Province || result.Province || '',
+        city: result.Area?.City || result.City || '',
+        county: result.Area?.County || result.County || '',
+        industry: result.Industry?.Industry || '',
+        subIndustry: result.Industry?.SubIndustry || '',
+        qccIndustry: result.QccIndustry?.CName || result.QccIndustry?.BName || '',
+        stockInfo: result.StockInfo ? {
+          stockNumber: result.StockInfo.StockNumber || '',
+          stockType: result.StockInfo.StockType || ''
+        } : null,
+        contactInfo: result.ContactInfo ? {
+          tel: result.ContactInfo.Tel || '',
+          email: result.ContactInfo.Email || ''
+        } : null,
+        originalName: Array.isArray(result.OriginalName) ? result.OriginalName.map((n: any) => n.Name || n).filter(Boolean) : [],
+        imageUrl: result.ImageUrl || '',
+        taxNo: result.TaxNo || '',
+        imExCode: result.ImExCode || '',
+        englishName: result.EnglishName || ''
+      };
+    }
+
+    // 转换2006全量风险数据
+    function transformRiskScanData(data: any) {
+      if (!data) return null;
+      return {
+        // 工商扩展
+        partners: Array.isArray(data.PartnerList) ? data.PartnerList.slice(0, 20).map((p: any) => ({
+          name: p.StockName || '',
+          type: p.StockType || '',
+          percent: p.StockPercent || '',
+          shouldCapi: p.ShouldCapi || '',
+          subscribedCapital: p.SubscribedCapital || '',
+          stakeDate: p.StakeDate ? p.StakeDate.split(' ')[0] : '',
+          creditCode: p.CreditCode || '',
+          area: p.Area || ''
+        })) : [],
+        employees: Array.isArray(data.EmployeeList) ? data.EmployeeList.slice(0, 20).map((e: any) => ({
+          name: e.Name || '',
+          job: e.Job || ''
+        })) : [],
+        branches: Array.isArray(data.BranchList) ? data.BranchList.slice(0, 20).map((b: any) => ({
+          name: b.Name || '',
+          creditCode: b.CreditCode || '',
+          operName: b.OperName || '',
+          startDate: b.StartDate ? b.StartDate.split(' ')[0] : '',
+          status: b.Status || ''
+        })) : [],
+        changes: Array.isArray(data.ChangeList) ? data.ChangeList.slice(0, 20).map((c: any) => ({
+          projectName: c.ProjectName || '',
+          changeSubject: c.ChangeSubject || '',
+          changeDate: c.ChangeDate ? c.ChangeDate.split(' ')[0] : '',
+          before: Array.isArray(c.BeforeList) ? c.BeforeList.join('；') : '',
+          after: Array.isArray(c.AfterList) ? c.AfterList.join('；') : ''
+        })) : [],
+        investments: Array.isArray(data.InvestmentList) ? data.InvestmentList.slice(0, 20).map((i: any) => ({
+          name: i.Name || '',
+          status: i.Status || '',
+          fundedRatio: i.FundedRatio || '',
+          shouldCapi: i.ShouldCapi || '',
+          industry: i.Industry?.SubIndustry || i.Industry?.Industry || '',
+          startDate: i.StartDate ? i.StartDate.split(' ')[0] : ''
+        })) : [],
+        adminLicenses: Array.isArray(data.AdminLicenseList) ? data.AdminLicenseList.slice(0, 10).map((a: any) => ({
+          docNo: a.LicensDocNo || '',
+          docName: a.LicensDocName || '',
+          validityFrom: a.ValidityFrom ? a.ValidityFrom.split(' ')[0] : '',
+          validityTo: a.ValidityTo ? a.ValidityTo.split(' ')[0] : '',
+          office: a.LicensOffice || '',
+          content: a.LicensContent || ''
+        })) : [],
+        tags: Array.isArray(data.TagList) ? data.TagList.map((t: any) => t.Name || '').filter(Boolean) : [],
+        revokeInfo: data.RevokeInfo ? {
+          cancelDate: data.RevokeInfo.CancelDate ? data.RevokeInfo.CancelDate.split(' ')[0] : '',
+          cancelReason: data.RevokeInfo.CancelReason || '',
+          revokeDate: data.RevokeInfo.RevokeDate ? data.RevokeInfo.RevokeDate.split(' ')[0] : '',
+          revokeReason: data.RevokeInfo.RevokeReason || ''
+        } : null,
+        parent: data.Parent ? {
+          name: data.Parent.Name || '',
+          operName: data.Parent.OperName || '',
+          status: data.Parent.Status || '',
+          registCapi: data.Parent.RegistCapi || ''
+        } : null,
+        beneficiaries: Array.isArray(data.BeneficiaryList) ? data.BeneficiaryList.slice(0, 10).map((b: any) => ({
+          name: b.Name || '',
+          finalBenefitPercent: b.FinalBenefitPercent || '',
+          reason: b.Reason || ''
+        })) : [],
+        actualControllers: Array.isArray(data.ActualControllerList) ? data.ActualControllerList.slice(0, 10).map((a: any) => ({
+          name: a.Name || '',
+          finalBenefitPercent: a.FinalBenefitPercent || '',
+          controlPercent: a.ControlPercent || '',
+          isActual: a.IsActual || ''
+        })) : [],
+        groupInfo: data.GroupInfo ? { name: data.GroupInfo.Name || '' } : null,
+        mainProducts: Array.isArray(data.MainProductList) ? data.MainProductList : [],
+        approveSites: Array.isArray(data.ApproveSiteList) ? data.ApproveSiteList.slice(0, 10).map((s: any) => ({
+          name: s.Name || '',
+          webAddress: s.WebAddress || '',
+          domainName: s.DomainName || '',
+          licenseNo: s.LesenceNo || ''
+        })) : [],
+        // 税务风险
+        taxCreditList: Array.isArray(data.TaxCreditList) ? data.TaxCreditList.slice(0, 10).map((t: any) => ({
+          year: t.Year || '',
+          level: t.Level || '',
+          org: t.Org || ''
+        })) : [],
+        taxOweNotice: data.TaxOweNotice ? {
+          totalCount: Number(data.TaxOweNotice.TotalCount) || 0,
+          totalAmount: data.TaxOweNotice.TotalAmount || '',
+          items: Array.isArray(data.TaxOweNotice.DataList) ? data.TaxOweNotice.DataList.slice(0, 10).map((i: any) => ({
+            title: i.Title || '',
+            amount: i.Amount || '',
+            newAmount: i.NewAmount || '',
+            publishDate: i.PublishDate ? i.PublishDate.split(' ')[0] : '',
+            publishOffice: i.PublishOffice || ''
+          })) : []
+        } : null,
+        taxIllegal: data.TaxIllegal ? {
+          totalCount: Number(data.TaxIllegal.TotalCount) || 0,
+          items: Array.isArray(data.TaxIllegal.DataList) ? data.TaxIllegal.DataList.slice(0, 10).map((i: any) => ({
+            publishDate: i.PublishDate ? i.PublishDate.split(' ')[0] : '',
+            caseNature: i.CaseNature || '',
+            taxGov: i.TaxGov || '',
+            illegalContent: i.IllegalContent || '',
+            punishContent: i.PunishContent || ''
+          })) : []
+        } : null,
+        taxAbnormal: data.TaxAbnormal ? {
+          totalCount: Number(data.TaxAbnormal.TotalCount) || 0,
+          items: Array.isArray(data.TaxAbnormal.DataList) ? data.TaxAbnormal.DataList.slice(0, 10).map((i: any) => ({
+            taxNo: i.TaxNo || '',
+            addOffice: i.AddOffice || '',
+            addDate: i.AddDate ? i.AddDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        taxHurry: data.TaxHurry ? {
+          totalCount: Number(data.TaxHurry.TotalCount) || 0,
+          items: Array.isArray(data.TaxHurry.DataList) ? data.TaxHurry.DataList.slice(0, 5).map((i: any) => ({
+            taxCategory: i.TaxCategory || '',
+            taxOwedAmt: i.TaxOwedAmt || '',
+            deadlineDate: i.DeadlineDate ? i.DeadlineDate.split(' ')[0] : '',
+            taxAuthority: i.TaxAuthority || ''
+          })) : []
+        } : null,
+        // 监管与司法风险
+        adminPenalty: data.AdminPenalty ? {
+          totalCount: Number(data.AdminPenalty.TotalCount) || 0,
+          totalAmount: data.AdminPenalty.TotalAmount || '',
+          items: Array.isArray(data.AdminPenalty.DataList) ? data.AdminPenalty.DataList.slice(0, 10).map((i: any) => ({
+            docNo: i.DocNo || '',
+            reason: i.PunishReason || '',
+            result: i.PunishResult || '',
+            amount: i.PunishAmt || '',
+            office: i.PunishOffice || '',
+            date: i.PunishDate ? i.PunishDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        exception: data.Exception ? {
+          totalCount: Number(data.Exception.TotalCount) || 0,
+          items: Array.isArray(data.Exception.DataList) ? data.Exception.DataList.slice(0, 10).map((i: any) => ({
+            addDate: i.AddDate ? i.AddDate.split(' ')[0] : '',
+            addOffice: i.AddOffice || '',
+            addReason: i.AddReason || ''
+          })) : []
+        } : null,
+        seriousIllegal: data.SeriousIllegal ? {
+          totalCount: Number(data.SeriousIllegal.TotalCount) || 0,
+          items: Array.isArray(data.SeriousIllegal.DataList) ? data.SeriousIllegal.DataList.slice(0, 10).map((i: any) => ({
+            addDate: i.AddDate ? i.AddDate.split(' ')[0] : '',
+            addOffice: i.AddOffice || '',
+            addReason: i.AddReason || ''
+          })) : []
+        } : null,
+        shiXin: data.ShiXin ? {
+          totalCount: Number(data.ShiXin.TotalCount) || 0,
+          totalAmount: data.ShiXin.TotalAmount || '',
+          items: Array.isArray(data.ShiXin.DataList) ? data.ShiXin.DataList.slice(0, 10).map((i: any) => ({
+            caseNo: i.CaseNo || '',
+            executeCourt: i.ExecuteCourt || '',
+            amount: i.Amount || '',
+            executeStatus: i.ExecuteStatus || '',
+            actionRemark: i.ActionRemark || '',
+            registerDate: i.RegisterDate ? i.RegisterDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        zhiXing: data.ZhiXing ? {
+          totalCount: Number(data.ZhiXing.TotalCount) || 0,
+          totalAmount: data.ZhiXing.TotalAmount || '',
+          items: Array.isArray(data.ZhiXing.DataList) ? data.ZhiXing.DataList.slice(0, 10).map((i: any) => ({
+            caseNo: i.CaseNo || '',
+            biaoDi: i.BiaoDi || '',
+            executeCourt: i.ExecuteCourt || '',
+            registerDate: i.RegisterDate ? i.RegisterDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        equityFreeze: data.EquityFreeze ? {
+          totalCount: Number(data.EquityFreeze.TotalCount) || 0,
+          items: Array.isArray(data.EquityFreeze.DataList) ? data.EquityFreeze.DataList.slice(0, 10).map((i: any) => ({
+            docNo: i.DocNo || '',
+            beExecuted: i.BeExecuted || '',
+            freezeCompany: i.FreezeCompany || '',
+            equityAmount: i.EquityAmount || '',
+            executeCourt: i.ExecuteCourt || '',
+            status: i.Status || '',
+            freezeStartDate: i.FreezeStartDate ? i.FreezeStartDate.split(' ')[0] : '',
+            freezeEndDate: i.FreezeEndDate ? i.FreezeEndDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        equityPledge: data.EquityPledge ? {
+          totalCount: Number(data.EquityPledge.TotalCount) || 0,
+          items: Array.isArray(data.EquityPledge.DataList) ? data.EquityPledge.DataList.slice(0, 10).map((i: any) => ({
+            registerNo: i.RegisterNo || '',
+            pledgorList: Array.isArray(i.PledgorList) ? i.PledgorList.join('、') : '',
+            pledgeeList: Array.isArray(i.PledgeeList) ? i.PledgeeList.join('、') : '',
+            relatedCompany: i.RelatedCompany || '',
+            pledgedAmount: i.PledgedAmount || '',
+            registerDate: i.RegisterDate ? i.RegisterDate.split(' ')[0] : '',
+            status: i.Status || ''
+          })) : []
+        } : null,
+        bankruptcy: data.Bankruptcy ? {
+          totalCount: Number(data.Bankruptcy.TotalCount) || 0,
+          items: Array.isArray(data.Bankruptcy.DataList) ? data.Bankruptcy.DataList.slice(0, 10).map((i: any) => ({
+            caseNo: i.CaseNo || '',
+            publicDate: i.PublicDate ? i.PublicDate.split(' ')[0] : '',
+            applicantList: Array.isArray(i.ApplicantList) ? i.ApplicantList.join('、') : '',
+            respondentList: Array.isArray(i.RespondentList) ? i.RespondentList.join('、') : ''
+          })) : []
+        } : null,
+        sumptuary: data.Sumptuary ? {
+          totalCount: Number(data.Sumptuary.TotalCount) || 0,
+          totalAmount: data.Sumptuary.TotalAmount || '',
+          items: Array.isArray(data.Sumptuary.DataList) ? data.Sumptuary.DataList.slice(0, 10).map((i: any) => ({
+            caseNo: i.CaseNo || '',
+            companyName: i.CompanyName || '',
+            relatedName: i.RelatedName || '',
+            applicant: i.Applicant || '',
+            amount: i.Amount || '',
+            executeCourt: i.ExecuteCourt || '',
+            publicDate: i.PublicDate ? i.PublicDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        envPunishment: data.EnvPunishment ? {
+          totalCount: Number(data.EnvPunishment.TotalCount) || 0,
+          totalAmount: data.EnvPunishment.TotalAmount || '',
+          items: Array.isArray(data.EnvPunishment.DataList) ? data.EnvPunishment.DataList.slice(0, 10).map((i: any) => ({
+            docNo: i.DocNo || '',
+            reason: i.PunishReason || '',
+            result: i.PunishResult || '',
+            amount: i.PunishAmt || '',
+            office: i.PunishOffice || '',
+            date: i.PunishDate ? i.PunishDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        chattelMortgage: data.ChattelMortgage ? {
+          totalCount: Number(data.ChattelMortgage.TotalCount) || 0,
+          items: Array.isArray(data.ChattelMortgage.DataList) ? data.ChattelMortgage.DataList.slice(0, 10).map((i: any) => ({
+            registerNo: i.RegisterNo || '',
+            status: i.Status || '',
+            registerDate: i.RegisterDate ? i.RegisterDate.split(' ')[0] : '',
+            secureClaimsAmount: i.SecureClaimsAmount || '',
+            pledgor: Array.isArray(i.Pledger) ? i.Pledger.join('、') : '',
+            pledgee: Array.isArray(i.Pledgee) ? i.Pledgee.join('、') : '',
+            debtTerm: i.DebtTerm || ''
+          })) : []
+        } : null,
+        liquidation: data.Liquidation ? {
+          leader: data.Liquidation.Leader || '',
+          member: data.Liquidation.Member || ''
+        } : null,
+        publicSecurityNotice: data.PublicSecurityNotice ? {
+          totalCount: Number(data.PublicSecurityNotice.TotalCount) || 0,
+          items: Array.isArray(data.PublicSecurityNotice.DataList) ? data.PublicSecurityNotice.DataList.slice(0, 5).map((i: any) => ({
+            name: i.Name || '',
+            caseReason: i.CaseReason || '',
+            publishOffice: i.PublishOffice || '',
+            publishDate: i.PublishDate ? i.PublishDate.split(' ')[0] : ''
+          })) : []
+        } : null,
+        // 财务数据
+        financialInformation: data.FinancialInformation ? {
+          accountTitle: data.FinancialInformation.AccountTitle || '',
+          amount: data.FinancialInformation.Amount || '',
+          year: data.FinancialInformation.Year || ''
+        } : null,
+        // 产业链
+        industryChainList: Array.isArray(data.IndustryChainList) ? data.IndustryChainList.map((c: any) => ({
+          industryChainName: c.IndustryChainName || ''
+        })) : []
       };
     }
 
@@ -312,7 +621,6 @@ export async function GET(request: NextRequest) {
         employeeCount: basic.EmployeeCount || '',
         hasWebSite: basic.HasWebSite || '',
         status: basic.Status || '',
-        // 财务数据
         totalAssets: assets.TotalAssets || '',
         totalEquity: assets.TotalOwnersEquity || '',
         totalLiabilities: assets.TotalLiabilities || '',
@@ -322,7 +630,6 @@ export async function GET(request: NextRequest) {
         netProfit: assets.NetProfit || '',
         totalTax: assets.TotalTaxAmount || '',
         governmentSubsidy: assets.GovernmentSubsidy || '',
-        // 股东出资
         partners: partners.map((p: any) => ({
           name: p.Name || '',
           shouldCapi: p.ShouldCapi || '',
@@ -332,32 +639,27 @@ export async function GET(request: NextRequest) {
           realDate: p.RealDate || '',
           realType: p.RealType || ''
         })),
-        // 对外投资
         investments: investments.map((i: any) => ({
           name: i.Name || '',
           regNo: i.RegNo || ''
         })),
-        // 股权变更
         stockChanges: stockChanges.map((s: any) => ({
           name: s.Name || '',
           before: s.Before || '',
           after: s.After || '',
           changeDate: s.ChangeDate ? s.ChangeDate.split(' ')[0] : ''
         })),
-        // 网站
         websites: websites.map((w: any) => ({
           type: w.Type || '',
           name: w.Name || '',
           webSite: w.WebSite || ''
         })),
-        // 工商变更
         changes: changes.map((c: any) => ({
           changeName: c.ChangeName || '',
           before: c.Before || '',
           after: c.After || '',
           changeDate: c.ChangeDate ? c.ChangeDate.split(' ')[0] : ''
         })),
-        // 社保
         socialInsurance: {
           urbanBasicIns: social.UrbanBasicIns || '',
           employeeBasicIns: social.EmployeeBasicIns || '',
@@ -371,14 +673,23 @@ export async function GET(request: NextRequest) {
     // 动态生成工商信息表格行（有数据才显示）
     function buildBusinessInfoRows(info: any): TableRow[] {
       const rows: TableRow[] = [];
+      const scaleMap: Record<string, string> = { L: '大型', M: '中型', S: '小型', XS: '微型' };
+      const companyTypeMap: Record<string, string> = {
+        '1': '中央企业', '2': '地方国有企业', '3': '中央部委', '4': '地方政府',
+        '5': '民营企业', '6': '其他', '7': '事业单位', '8': '个体工商户'
+      };
       const pairs: [string, string, string, string][] = [
         // [左标签, 左值, 右标签, 右值]
         ['登记状态', info.status, '成立日期', info.startDate],
         ['法定代表人', info.operName, '企业类型', info.econKind],
-        ['注册资本', info.registCapi, '实缴资本', info.paidUpCapital],
+        ['注册资本', info.registCapi, '实缴资本', info.paidUpCapital || info.realCapi],
         ['统一社会信用代码', info.creditCode, '注册号', info.regNo],
-        ['组织机构代码', info.orgNo, '所属省份', info.province === 'JS' ? '江苏省' : info.province],
+        ['纳税人识别号', info.taxNo, '组织机构代码', info.orgNo],
+        ['纳税人资质', info.taxpayerType, '人员规模', info.personScope || (info.scale ? scaleMap[info.scale] : '')],
+        ['参保人数', info.insuredCount + (info.insuredCount ? '人' : ''), '企业规模', info.scale ? scaleMap[info.scale] + '企业' : ''],
         ['登记机关', info.belongOrg, '核准日期', info.checkDate],
+        ['司库企业属性', info.companyType ? companyTypeMap[info.companyType] || info.companyType : '', '小微企业', info.isSmall === '1' ? '是' : info.isSmall === '0' ? '否' : ''],
+        ['进出口企业代码', info.imExCode, '英文名', info.englishName],
       ];
 
       for (const [leftLabel, leftVal, rightLabel, rightVal] of pairs) {
@@ -614,6 +925,668 @@ export async function GET(request: NextRequest) {
       return rows;
     }
 
+    // 构建2006合作风险扫描的全部模块（自适应：有数据才显示）
+    function buildRiskScanSections(risk: any): any[] {
+      const sections: any[] = [];
+
+      // ===== 一、工商扩展信息 =====
+      // 1. 股东信息
+      if (risk.partners?.length > 0) {
+        sections.push(createHeading2('股东信息'));
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('股东名称'),
+              createHeaderCell('类型'),
+              createHeaderCell('持股比例'),
+              createHeaderCell('认缴出资'),
+              createHeaderCell('首次持股日期')
+            ]
+          }),
+          ...risk.partners.map((p: any) => new TableRow({
+            children: [
+              createDataCell(p.name || '-'),
+              createDataCell(p.type || '-', { align: 'center' }),
+              createDataCell(p.percent || '-', { align: 'center', bold: true, color: '1a56db' }),
+              createDataCell(p.shouldCapi || p.subscribedCapital || '-', { align: 'center' }),
+              createDataCell(p.stakeDate || '-', { align: 'center' })
+            ]
+          }))
+        ];
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // 2. 主要人员
+      if (risk.employees?.length > 0) {
+        sections.push(createHeading2('主要人员'));
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('姓名'),
+              createHeaderCell('职务')
+            ]
+          }),
+          ...risk.employees.map((e: any) => new TableRow({
+            children: [
+              createDataCell(e.name || '-'),
+              createDataCell(e.job || '-', { align: 'center' })
+            ]
+          }))
+        ];
+        // 两列并排显示，节省空间
+        const twoColRows: TableRow[] = [];
+        for (let i = 0; i < risk.employees.length; i += 2) {
+          const e1 = risk.employees[i];
+          const e2 = risk.employees[i + 1];
+          twoColRows.push(new TableRow({
+            children: [
+              createHeaderCell('姓名'),
+              createDataCell(e1?.name || '-'),
+              createHeaderCell('职务'),
+              createDataCell(e1?.job || '-'),
+              ...(e2 ? [
+                createHeaderCell('姓名'),
+                createDataCell(e2.name || '-'),
+                createHeaderCell('职务'),
+                createDataCell(e2.job || '-')
+              ] : [
+                new TableCell({ columnSpan: 4, children: [new Paragraph({ children: [new TextRun({ text: '', size: 20 })] })] })
+              ])
+            ]
+          }));
+        }
+        // 还是用简洁的两列吧
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // 3. 工商变更记录（最多10条）
+      if (risk.changes?.length > 0) {
+        sections.push(createHeading2('工商变更记录'));
+        const changeItems = risk.changes.slice(0, 10);
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('变更日期'),
+              createHeaderCell('变更事项'),
+              createHeaderCell('变更前'),
+              createHeaderCell('变更后')
+            ]
+          }),
+          ...changeItems.map((c: any) => new TableRow({
+            children: [
+              createDataCell(c.changeDate || '-', { align: 'center' }),
+              createDataCell(c.projectName || c.changeSubject || '-', { bold: true }),
+              createDataCell((c.before || '').substring(0, 60), { size: 18, color: '888888' }),
+              createDataCell((c.after || '').substring(0, 60), { size: 18, color: '2b6cb0' })
+            ]
+          }))
+        ];
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        if (risk.changes.length > 10) {
+          sections.push(createParagraph(`（共${risk.changes.length}条变更记录，仅展示前10条）`, { size: 18, color: '999999' }));
+        }
+      }
+
+      // 4. 对外投资（最多10条）
+      if (risk.investments?.length > 0) {
+        sections.push(createHeading2('对外投资'));
+        const invItems = risk.investments.slice(0, 10);
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('被投资企业'),
+              createHeaderCell('持股比例'),
+              createHeaderCell('认缴出资'),
+              createHeaderCell('状态'),
+              createHeaderCell('所属行业')
+            ]
+          }),
+          ...invItems.map((i: any) => new TableRow({
+            children: [
+              createDataCell(i.name || '-'),
+              createDataCell(i.fundedRatio || '-', { align: 'center', bold: true, color: '1a56db' }),
+              createDataCell(i.shouldCapi || '-', { align: 'center' }),
+              createDataCell(i.status || '-', { align: 'center' }),
+              createDataCell(i.industry || '-', { align: 'center' })
+            ]
+          }))
+        ];
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // 5. 分支机构（最多10条）
+      if (risk.branches?.length > 0) {
+        sections.push(createHeading2('分支机构'));
+        const branchItems = risk.branches.slice(0, 10);
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('分支机构名称'),
+              createHeaderCell('负责人'),
+              createHeaderCell('成立日期'),
+              createHeaderCell('登记状态')
+            ]
+          }),
+          ...branchItems.map((b: any) => new TableRow({
+            children: [
+              createDataCell(b.name || '-'),
+              createDataCell(b.operName || '-', { align: 'center' }),
+              createDataCell(b.startDate || '-', { align: 'center' }),
+              createDataCell(b.status || '-', { align: 'center' })
+            ]
+          }))
+        ];
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // ===== 二、税务风险信息（重点高亮） =====
+      const hasTaxRisk = (risk.taxCreditList?.length > 0) ||
+        (risk.taxOweNotice?.totalCount > 0) ||
+        (risk.taxIllegal?.totalCount > 0) ||
+        (risk.taxAbnormal?.totalCount > 0) ||
+        (risk.taxHurry?.totalCount > 0);
+
+      if (hasTaxRisk) {
+        sections.push(new Paragraph({ spacing: { before: 400 }, children: [] }));
+        sections.push(new Paragraph({
+          spacing: { before: 200, after: 100 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'c53030', space: 4 } },
+          children: [new TextRun({ text: '税务风险信息', bold: true, size: 26, color: 'c53030' })]
+        }));
+
+        // 纳税信用等级
+        if (risk.taxCreditList?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: '📊 纳税信用等级', bold: true, size: 22, color: '2b6cb0' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('评价年度'),
+                createHeaderCell('信用等级'),
+                createHeaderCell('评价单位')
+              ]
+            }),
+            ...risk.taxCreditList.map((t: any) => new TableRow({
+              children: [
+                createDataCell(t.year || '-', { align: 'center' }),
+                createDataCell(t.level || '-', { align: 'center', bold: true, 
+                  color: t.level === 'A' ? '155724' : 
+                         t.level === 'B' ? '2b6cb0' :
+                         t.level === 'M' ? '856404' :
+                         t.level === 'C' ? 'B35A00' :
+                         t.level === 'D' ? '721C24' : '333333'
+                }),
+                createDataCell(t.org || '-', { align: 'center' })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 欠税公告（红色重点）
+        if (risk.taxOweNotice?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `⚠️ 欠税公告（${risk.taxOweNotice.totalCount}条）`, bold: true, size: 22, color: 'c53030' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('欠税税种'),
+                createHeaderCell('欠税金额'),
+                createHeaderCell('发布机关'),
+                createHeaderCell('发布日期')
+              ]
+            }),
+            ...risk.taxOweNotice.items.slice(0, 10).map((item: any) => new TableRow({
+              children: [
+                createDataCell(item.title || '-'),
+                createDataCell(item.amount || '-', { align: 'center', bold: true, color: 'c53030' }),
+                createDataCell(item.publishOffice || '-', { align: 'center' }),
+                createDataCell(item.publishDate || '-', { align: 'center' })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+          if (risk.taxOweNotice.totalCount > 10) {
+            sections.push(createParagraph(`（共${risk.taxOweNotice.totalCount}条，仅展示前10条）`, { size: 18, color: '999999' }));
+          }
+        }
+
+        // 税收违法（红色重点）
+        if (risk.taxIllegal?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🚨 税收违法（${risk.taxIllegal.totalCount}条）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          risk.taxIllegal.items.slice(0, 5).forEach((item: any, idx: number) => {
+            sections.push(createParagraph(
+              `【${idx + 1}】${item.caseNature || ''}（${item.taxGov || ''}）`,
+              { bold: true, color: '9b2c2c' }
+            ));
+            if (item.illegalContent) {
+              sections.push(createParagraph(`违法事实：${item.illegalContent.substring(0, 200)}`, { size: 19, color: '555555' }));
+            }
+            if (item.punishContent) {
+              sections.push(createParagraph(`处理结果：${item.punishContent.substring(0, 200)}`, { size: 19, color: '9b2c2c' }));
+            }
+            if (item.publishDate) {
+              sections.push(createParagraph(`发布日期：${item.publishDate}`, { size: 18, color: '999999' }));
+            }
+          });
+        }
+
+        // 税务非正常户
+        if (risk.taxAbnormal?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🔴 税务非正常户（${risk.taxAbnormal.totalCount}条）`, bold: true, size: 22, color: 'c53030' })
+          ] }));
+          risk.taxAbnormal.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `纳税人识别号：${item.taxNo || '-'} | 认定机关：${item.addOffice || '-'} | 认定日期：${item.addDate || '-'}`,
+              { size: 20 }
+            ));
+          });
+        }
+
+        // 税务催缴
+        if (risk.taxHurry?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `⏰ 税务催缴（${risk.taxHurry.totalCount}条）`, bold: true, size: 22, color: 'd69e2e' })
+          ] }));
+          risk.taxHurry.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `税种：${item.taxCategory || '-'} | 欠税额：${item.taxOwedAmt || '-'} | 限期：${item.deadlineDate || '-'} | 税务机关：${item.taxAuthority || '-'}`,
+              { size: 20 }
+            ));
+          });
+        }
+      }
+
+      // ===== 三、监管与司法风险 =====
+      const hasLegalRisk = (risk.adminPenalty?.totalCount > 0) ||
+        (risk.exception?.totalCount > 0) ||
+        (risk.seriousIllegal?.totalCount > 0) ||
+        (risk.shiXin?.totalCount > 0) ||
+        (risk.zhiXing?.totalCount > 0) ||
+        (risk.equityFreeze?.totalCount > 0) ||
+        (risk.equityPledge?.totalCount > 0) ||
+        (risk.bankruptcy?.totalCount > 0) ||
+        (risk.sumptuary?.totalCount > 0) ||
+        (risk.envPunishment?.totalCount > 0) ||
+        (risk.chattelMortgage?.totalCount > 0) ||
+        risk.liquidation ||
+        (risk.publicSecurityNotice?.totalCount > 0);
+
+      if (hasLegalRisk) {
+        sections.push(new Paragraph({ spacing: { before: 400 }, children: [] }));
+        sections.push(new Paragraph({
+          spacing: { before: 200, after: 100 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'c05621', space: 4 } },
+          children: [new TextRun({ text: '监管与司法风险信息', bold: true, size: 26, color: 'c05621' })]
+        }));
+
+        // 行政处罚
+        if (risk.adminPenalty?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: `⚖️ 行政处罚（${risk.adminPenalty.totalCount}条 / 涉案金额约${risk.adminPenalty.totalAmount || '0'}万元）`, bold: true, size: 22, color: 'c05621' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('处罚日期'),
+                createHeaderCell('处罚事由'),
+                createHeaderCell('处罚结果'),
+                createHeaderCell('处罚机关')
+              ]
+            }),
+            ...risk.adminPenalty.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell(item.date || '-', { align: 'center' }),
+                createDataCell((item.reason || '').substring(0, 50), { size: 19 }),
+                createDataCell((item.result || '').substring(0, 50) || item.amount + '元', { size: 19, color: 'c05621' }),
+                createDataCell((item.office || '').substring(0, 20), { align: 'center', size: 18 })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+          if (risk.adminPenalty.totalCount > 5) {
+            sections.push(createParagraph(`（共${risk.adminPenalty.totalCount}条，仅展示前5条）`, { size: 18, color: '999999' }));
+          }
+        }
+
+        // 经营异常
+        if (risk.exception?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `⚠️ 经营异常（${risk.exception.totalCount}条）`, bold: true, size: 22, color: 'd69e2e' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('列入日期'),
+                createHeaderCell('列入原因'),
+                createHeaderCell('列入机关')
+              ]
+            }),
+            ...risk.exception.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell(item.addDate || '-', { align: 'center' }),
+                createDataCell(item.addReason || '-'),
+                createDataCell(item.addOffice || '-', { align: 'center' })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 严重违法
+        if (risk.seriousIllegal?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🚫 严重违法失信（${risk.seriousIllegal.totalCount}条）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          risk.seriousIllegal.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• ${item.addReason || ''}（${item.addOffice || ''}，${item.addDate || ''}）`,
+              { size: 20 }
+            ));
+          });
+        }
+
+        // 失信被执行人
+        if (risk.shiXin?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `⛔ 失信被执行人（${risk.shiXin.totalCount}条 / 涉案金额约${risk.shiXin.totalAmount || '0'}万元）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('案号'),
+                createHeaderCell('执行法院'),
+                createHeaderCell('涉案金额'),
+                createHeaderCell('履行情况')
+              ]
+            }),
+            ...risk.shiXin.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell((item.caseNo || '').substring(0, 30), { size: 18 }),
+                createDataCell((item.executeCourt || '').substring(0, 20), { align: 'center', size: 18 }),
+                createDataCell(item.amount ? item.amount + '元' : '-', { align: 'center', bold: true, color: '9b2c2c' }),
+                createDataCell(item.executeStatus || '-', { align: 'center', size: 18 })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 被执行人
+        if (risk.zhiXing?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `📋 被执行人（${risk.zhiXing.totalCount}条 / 涉案金额约${risk.zhiXing.totalAmount || '0'}万元）`, bold: true, size: 22, color: 'c05621' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('案号'),
+                createHeaderCell('执行法院'),
+                createHeaderCell('执行标的'),
+                createHeaderCell('立案日期')
+              ]
+            }),
+            ...risk.zhiXing.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell((item.caseNo || '').substring(0, 30), { size: 18 }),
+                createDataCell((item.executeCourt || '').substring(0, 20), { align: 'center', size: 18 }),
+                createDataCell(item.biaoDi ? item.biaoDi + '元' : '-', { align: 'center' }),
+                createDataCell(item.registerDate || '-', { align: 'center' })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 股权冻结
+        if (risk.equityFreeze?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `❄️ 股权冻结（${risk.equityFreeze.totalCount}条）`, bold: true, size: 22, color: 'c05621' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('被执行人'),
+                createHeaderCell('冻结股权数额'),
+                createHeaderCell('执行法院'),
+                createHeaderCell('冻结期限')
+              ]
+            }),
+            ...risk.equityFreeze.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell(item.beExecuted || '-'),
+                createDataCell(item.equityAmount || '-', { align: 'center', bold: true }),
+                createDataCell((item.executeCourt || '').substring(0, 20), { align: 'center', size: 18 }),
+                createDataCell((item.freezeStartDate || '') + ' ~ ' + (item.freezeEndDate || ''), { align: 'center', size: 18 })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 破产重整
+        if (risk.bankruptcy?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `💀 破产重整（${risk.bankruptcy.totalCount}条）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          risk.bankruptcy.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• ${item.caseNo || ''} | 申请人：${item.applicantList || '-'} | 被申请人：${item.respondentList || '-'} | ${item.publicDate || ''}`,
+              { size: 20 }
+            ));
+          });
+        }
+
+        // 限制高消费
+        if (risk.sumptuary?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🚫 限制高消费（${risk.sumptuary.totalCount}条）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          const rows = [
+            new TableRow({
+              children: [
+                createHeaderCell('涉案主体'),
+                createHeaderCell('关联人员'),
+                createHeaderCell('执行法院'),
+                createHeaderCell('发布日期')
+              ]
+            }),
+            ...risk.sumptuary.items.slice(0, 5).map((item: any) => new TableRow({
+              children: [
+                createDataCell(item.companyName || '-'),
+                createDataCell(item.relatedName || '-', { align: 'center' }),
+                createDataCell((item.executeCourt || '').substring(0, 20), { align: 'center', size: 18 }),
+                createDataCell(item.publicDate || '-', { align: 'center' })
+              ]
+            }))
+          ];
+          sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        }
+
+        // 环保处罚
+        if (risk.envPunishment?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🌿 环保处罚（${risk.envPunishment.totalCount}条）`, bold: true, size: 22, color: '276749' })
+          ] }));
+          risk.envPunishment.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• ${item.reason?.substring(0, 80) || ''}（处罚：${item.result?.substring(0, 50) || item.amount + '元'}，${item.office || ''}，${item.date || ''}）`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 股权出质
+        if (risk.equityPledge?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `📌 股权出质（${risk.equityPledge.totalCount}条）`, bold: true, size: 22, color: 'd69e2e' })
+          ] }));
+          risk.equityPledge.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• 出质人：${item.pledgorList || '-'} | 质权人：${item.pledgeeList || '-'} | 数额：${item.pledgedAmount || '-'} | 状态：${item.status || '-'} | 登记日期：${item.registerDate || ''}`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 动产抵押
+        if (risk.chattelMortgage?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `🏭 动产抵押（${risk.chattelMortgage.totalCount}条）`, bold: true, size: 22, color: 'd69e2e' })
+          ] }));
+          risk.chattelMortgage.items.slice(0, 5).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• 登记号：${item.registerNo || '-'} | 担保债权：${item.secureClaimsAmount || '-'} | 抵押人：${item.pledgor || '-'} | 状态：${item.status || '-'} | 期限：${item.debtTerm || ''}`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 清算信息
+        if (risk.liquidation) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `⚰️ 清算信息`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          sections.push(createInfoRow('清算组负责人', risk.liquidation.leader || '-'));
+          sections.push(createInfoRow('清算组成员', risk.liquidation.member || '-'));
+        }
+
+        // 公安通告
+        if (risk.publicSecurityNotice?.totalCount > 0) {
+          sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+            new TextRun({ text: `👮 公安通告（${risk.publicSecurityNotice.totalCount}条）`, bold: true, size: 22, color: '9b2c2c' })
+          ] }));
+          risk.publicSecurityNotice.items.slice(0, 3).forEach((item: any) => {
+            sections.push(createParagraph(
+              `• ${item.name || ''}：${item.caseReason || ''}（${item.publishOffice || ''}，${item.publishDate || ''}）`,
+              { size: 20 }
+            ));
+          });
+        }
+      }
+
+      // ===== 四、其他信息 =====
+      const hasOtherInfo = (risk.tags?.length > 0) ||
+        (risk.adminLicenses?.length > 0) ||
+        (risk.approveSites?.length > 0) ||
+        risk.financialInformation ||
+        (risk.beneficiaries?.length > 0) ||
+        (risk.actualControllers?.length > 0) ||
+        risk.parent ||
+        risk.groupInfo ||
+        (risk.mainProducts?.length > 0);
+
+      if (hasOtherInfo) {
+        sections.push(new Paragraph({ spacing: { before: 400 }, children: [] }));
+        sections.push(new Paragraph({
+          spacing: { before: 200, after: 100 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '2b6cb0', space: 4 } },
+          children: [new TextRun({ text: '其他信息', bold: true, size: 26, color: '2b6cb0' })]
+        }));
+
+        // 企业标签
+        if (risk.tags?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 50 }, children: [
+            new TextRun({ text: '🏷️ 企业标签：', bold: true, size: 20, color: '555555' }),
+            new TextRun({ text: risk.tags.join(' | '), size: 20, color: '2b6cb0' })
+          ] }));
+        }
+
+        // 受益所有人
+        if (risk.beneficiaries?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: '👤 受益所有人', bold: true, size: 22, color: '2b6cb0' })
+          ] }));
+          risk.beneficiaries.slice(0, 5).forEach((b: any) => {
+            sections.push(createParagraph(
+              `• ${b.name || '-'} | 最终受益股份：${b.finalBenefitPercent || '-'}${b.reason ? ` | 判定理由：${b.reason.substring(0, 50)}` : ''}`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 实际控制人
+        if (risk.actualControllers?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: '🎯 实际控制人', bold: true, size: 22, color: '2b6cb0' })
+          ] }));
+          risk.actualControllers.slice(0, 5).forEach((a: any) => {
+            sections.push(createParagraph(
+              `• ${a.name || ''}（${a.isActual === '1' ? '实际控制人' : '疑似实际控制人'}）| 持股：${a.finalBenefitPercent || '-'} | 表决权：${a.controlPercent || '-'}`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 总公司
+        if (risk.parent) {
+          sections.push(createInfoRow('总公司', `${risk.parent.name || '-'}（${risk.parent.status || '-'}，注册资本：${risk.parent.registCapi || '-'}）`));
+        }
+
+        // 所属集团
+        if (risk.groupInfo?.name) {
+          sections.push(createInfoRow('所属集团', risk.groupInfo.name));
+        }
+
+        // 行政许可
+        if (risk.adminLicenses?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: `📜 行政许可（${risk.adminLicenses.length}条）`, bold: true, size: 22, color: '2b6cb0' })
+          ] }));
+          risk.adminLicenses.slice(0, 5).forEach((a: any) => {
+            sections.push(createParagraph(
+              `• ${a.docName || a.docNo || ''}（${a.office || ''}）：有效期${a.validityFrom || '-'}至${a.validityTo || '-'}`,
+              { size: 19 }
+            ));
+          });
+        }
+
+        // 财务数据（2006只有一条简要数据）
+        if (risk.financialInformation) {
+          sections.push(createHeading2('公开财务数据'));
+          sections.push(createInfoRow('数据科目', risk.financialInformation.accountTitle || '-'));
+          sections.push(createInfoRow('数额', risk.financialInformation.amount || '-'));
+          sections.push(createInfoRow('年份', risk.financialInformation.year || '-'));
+          sections.push(createParagraph('数据来源：企业公开披露信息，仅供参考', { size: 18, color: '999999' }));
+        }
+
+        // 主营产品
+        if (risk.mainProducts?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 50 }, children: [
+            new TextRun({ text: '📦 主营产品：', bold: true, size: 20, color: '555555' }),
+            new TextRun({ text: risk.mainProducts.slice(0, 5).join('、'), size: 20, color: '333333' })
+          ] }));
+        }
+
+        // 备案网站
+        if (risk.approveSites?.length > 0) {
+          sections.push(new Paragraph({ spacing: { before: 200, after: 100 }, children: [
+            new TextRun({ text: `🌐 备案网站（${risk.approveSites.length}个）`, bold: true, size: 22, color: '2b6cb0' })
+          ] }));
+          risk.approveSites.slice(0, 5).forEach((s: any) => {
+            sections.push(createParagraph(
+              `• ${s.name || '-'}：${s.webAddress || ''}（${s.licenseNo || ''}）`,
+              { size: 19 }
+            ));
+          });
+        }
+      }
+
+      // 数据来源说明
+      if (sections.length > 0) {
+        sections.push(new Paragraph({ spacing: { before: 300, after: 100 }, children: [
+          new TextRun({ text: '※ 以上工商及风险数据来源于企查查公开信息，仅供参考，具体以官方公示为准。', italics: true, size: 18, color: '999999' })
+        ] }));
+      }
+
+      return sections;
+    }
+
     const { color: riskColor } = getRiskLevel(totalScore);
 
     // 读取LOGO图片
@@ -736,7 +1709,10 @@ export async function GET(request: NextRequest) {
             })
           ] : []),
 
-          // 年报信息（如果有）
+          // 2006风险扫描扩展模块（仅2006格式有数据时显示）
+          ...(riskScanData ? buildRiskScanSections(riskScanData) : []),
+
+          // 年报信息（如果有，410+213格式）
           ...(annualReport ? [
             createHeading2(`年报数据（${annualReport.year || '最新'}）`),
             createParagraph(`数据来源：企业工商公示年报，发布日期：${annualReport.publishDate || '未公示'}`, { size: 18, color: '888888' }),
