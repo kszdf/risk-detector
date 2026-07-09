@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, AlignmentType, BorderStyle, ShadingType, HeadingLevel,
-  ImageRun
+  ImageRun, PageBreak
 } from 'docx';
 import fs from 'fs';
 import path from 'path';
@@ -33,6 +33,34 @@ const MODULE_NAMES: Record<string, string> = {
   expense: '费用与利润',
   structure: '架构与关联交易'
 };
+
+// 五维度20题完整映射（含题目、风险判定、政策条文）
+const V5_QUESTIONS: Record<string, { module: string; moduleName: string; question: string; name: string; consequence: string; taxPolicy: string; policyContent: string }> = {
+  'q1': { module: 'taxCompliance', moduleName: '申报与纳税合规', question: '近12个月是否存在逾期申报或逾期缴纳税款？', name: '逾期申报', consequence: '逾期申报由税务机关责令限期改正，可处2000元以下罚款；逾期缴纳税款按日加收万分之五滞纳金', taxPolicy: '《税收征收管理法》第六十二条、第六十三条', policyContent: '第六十二条：纳税人未按照规定的期限办理纳税申报和报送纳税资料的，或者扣缴义务人未按照规定的期限向税务机关报告代扣代缴、代收代缴税款的，由税务机关责令限期改正，可以处二千元以下的罚款；情节严重的，可以处二千元以上一万元以下的罚款。第六十三条：纳税人伪造、变造、隐匿、擅自销毁帐簿、记帐凭证，或者在帐簿上多列支出或者不列、少列收入，或者经税务机关通知申报而拒不申报或者进行虚假的纳税申报，不缴或者少缴应纳税款的，是偷税。' },
+  'q2': { module: 'taxCompliance', moduleName: '申报与纳税合规', question: '是否存在连续零申报或负申报超过6个月？', name: '连续零申报超6个月', consequence: '税务机关可认定为异常申报，纳入重点监控，要求企业进行纳税评估或稽查', taxPolicy: '《税收征收管理法》第三十五条', policyContent: '第三十五条：纳税人有下列情形之一的，税务机关有权核定其应纳税额：（一）依照法律、行政法规的规定可以不设置账簿的；（二）依照法律、行政法规的规定应当设置但未设置账簿的；（三）擅自销毁账簿或者拒不提供纳税资料的；（四）虽设置账簿，但账目混乱或者成本资料、收入凭证、费用凭证残缺不全，难以查账的；（五）发生纳税义务，未按照规定的期限办理纳税申报，经税务机关责令限期申报，逾期仍不申报的。' },
+  'q3': { module: 'taxCompliance', moduleName: '申报与纳税合规', question: '增值税申报收入与企业所得税申报收入是否存在较大差异？', name: '增值税与所得税收入差异', consequence: '税务机关可要求企业提供差异说明，无法合理说明的面临纳税调整和补税风险', taxPolicy: '《税收征收管理法》第三十五条', policyContent: '第三十五条第（五）项：税务机关有权对申报不实的企业核定其应纳税额，要求企业提供合理差异说明。' },
+  'q4': { module: 'taxCompliance', moduleName: '申报与纳税合规', question: '企业是否连续三年及以上亏损但仍持续经营？', name: '连续三年亏损仍经营', consequence: '列入纳税评估重点关注对象，税务机关可能怀疑存在隐匿收入或转移利润', taxPolicy: '《企业所得税法》第四十七条', policyContent: '第四十七条：企业实施其他不具有合理商业目的的安排而减少其应纳税收入或者所得额的，税务机关有权按照合理方法调整。' },
+  'q5': { module: 'invoice', moduleName: '发票管理', question: '是否存在无票采购、取得走逃企业发票或品名不符的异常发票？', name: '异常发票/走逃企业', consequence: '已抵扣进项税额需转出，补缴增值税及滞纳金；善意取得可免于处罚，恶意取得按偷税处理', taxPolicy: '国家税务总局公告2014年第39号；《发票管理办法》第二十四条', policyContent: '国家税务总局公告2014年第39号：增值税一般纳税人取得异常凭证，尚未申报抵扣或申报出口退税的，不得用于抵扣或退税；已经申报抵扣的，一律先作进项税额转出。《发票管理办法》第二十四条：任何单位和个人应当按照发票管理规定使用发票，不得转借、转让、介绍他人转让发票。' },
+  'q6': { module: 'invoice', moduleName: '发票管理', question: '是否存在发票开具内容与实际经营范围明显不符？', name: '发票经营范围不符', consequence: '涉嫌虚开发票，补缴税款并处0.5-5倍罚款；虚开增值税专用发票的依法追究刑事责任', taxPolicy: '《发票管理办法》第二十二条；《刑法》第二百零五条', policyContent: '《发票管理办法》第二十二条：开具发票应当按照规定的时限、顺序、栏目，全部联次一次性如实开具，并加盖发票专用章。任何单位和个人不得有下列虚开发票行为：（一）为他人、为自己开具与实际经营业务情况不符的发票。《刑法》第二百零五条：虚开增值税专用发票或者虚开用于骗取出口退税、抵扣税款的其他发票的，处三年以下有期徒刑或者拘役，并处二万元以上二十万元以下罚金。' },
+  'q7': { module: 'invoice', moduleName: '发票管理', question: '是否存在大额现金交易或通过个人账户收款后"变票"入账？', name: '变票入账', consequence: '涉嫌虚开发票或偷税，补缴税款并处0.5-5倍罚款，构成犯罪的依法追究刑事责任', taxPolicy: '《发票管理办法》第二十二条；《税收征收管理法》第六十三条', policyContent: '通过变票入账掩盖真实交易的，按虚开发票和偷税论处。《税收征收管理法》第六十三条规定偷税行为由税务机关追缴税款、滞纳金，并处不缴或者少缴的税款百分之五十以上五倍以下的罚款。' },
+  'q8': { module: 'invoice', moduleName: '发票管理', question: '是否存在进销项品名/数量严重不匹配？', name: '进销项不匹配', consequence: '可能被认定为取得异常凭证，进项税额不得抵扣，需补缴增值税及滞纳金', taxPolicy: '《增值税暂行条例》第九条', policyContent: '《增值税暂行条例》第九条：纳税人购进货物、劳务、服务、无形资产、不动产，取得的增值税扣税凭证不符合法律、行政法规或者国务院税务主管部门有关规定的，其进项税额不得从销项税额中抵扣。' },
+  'q9': { module: 'revenue', moduleName: '收入与成本', question: '是否存在延迟开票确认收入、部分收入未入账或使用个人账户收款未报税？', name: '隐匿收入/个人账户收款', consequence: '按偷税论处，补缴增值税和企业所得税，按日加收万分之五滞纳金，并处0.5-5倍罚款', taxPolicy: '《税收征收管理法》第六十三条；《增值税暂行条例》第十九条', policyContent: '《增值税暂行条例》第十九条：发生应税销售行为，为收讫销售款项或者取得索取销售款项凭据的当天；先开具发票的，为开具发票的当天。隐瞒收入不入账的，按偷税论处。' },
+  'q10': { module: 'revenue', moduleName: '收入与成本', question: '是否存在账外经营（部分业务不入账，通过私人账户收支）？', name: '账外经营', consequence: '按偷税论处，补缴增值税和企业所得税，按日加收万分之五滞纳金，并处0.5-5倍罚款', taxPolicy: '《税收征收管理法》第六十三条；《会计法》第九条、第十六条', policyContent: '《会计法》第九条：各单位必须根据实际发生的经济业务事项进行会计核算，填制会计凭证，登记会计帐簿，编制财务会计报告。任何单位不得以虚假的经济业务事项或者资料进行会计核算。第十六条：各单位发生的各项经济业务事项应当在依法设置的会计帐簿上统一登记、核算，不得违反本法和国家统一的会计制度的规定私设会计帐簿登记、核算。' },
+  'q11': { module: 'revenue', moduleName: '收入与成本', question: '是否存在毛利率明显偏低或利润异常偏低？', name: '利润偏低', consequence: '税务机关可启动转让定价调查或纳税评估，要求补缴税款并加收利息', taxPolicy: '《企业所得税法》第四十一条', policyContent: '第四十一条：企业与其关联方之间的业务往来，不符合独立交易原则而减少企业或者其关联方应纳税收入或者所得额的，税务机关有权按照合理方法调整。企业与其关联方共同开发、受让无形资产，或者共同提供、接受劳务发生的成本，在计算应纳税所得额时应当按照独立交易原则进行分摊。' },
+  'q12': { module: 'revenue', moduleName: '收入与成本', question: '是否存在库存账实不符（账面有货但仓库没货，或仓库有货但账面无记录）？', name: '库存账实不符', consequence: '账面大于实际涉嫌已销售未入账隐匿收入；实际大于账面涉嫌虚增进项抵扣', taxPolicy: '《增值税暂行条例》第十条', policyContent: '《增值税暂行条例》第十条：下列项目的进项税额不得从销项税额中抵扣：（一）用于非增值税应税项目、免征增值税项目、集体福利或者个人消费的购进货物或者应税劳务。库存异常可能被认定为购进货物用于不得抵扣项目。' },
+  'q13': { module: 'expense', moduleName: '费用与利润', question: '是否存在将个人消费（家庭开支、个人购买大件商品等）以公司费用名义报销入账？', name: '个人消费报销', consequence: '相关费用不得税前扣除，需调增应纳税所得额补缴企业所得税，并代扣代缴个人所得税', taxPolicy: '《企业所得税法》第八条、第十条；财税〔2003〕158号', policyContent: '《企业所得税法》第十条：在计算应纳税所得额时，下列支出不得扣除：（八）与取得收入无关的其他支出。财税〔2003〕158号第二条：个人独资企业、合伙企业的个人投资者以企业资金为本人、家庭成员及其相关人员支付与企业生产经营无关的消费性支出及购买汽车、住房等财产性支出，视为企业对个人投资者的利润分配，并入投资者个人的生产、经营所得计征个人所得税。' },
+  'q14': { module: 'expense', moduleName: '费用与利润', question: '是否存在股东长期从公司借款不还（超过一年）？', name: '股东往来款过大', consequence: '股东借款年度终了未归还且未用于经营的，视同分红需代扣代缴20%个人所得税', taxPolicy: '财税〔2003〕158号第二条；《个人所得税法》第二条', policyContent: '财税〔2003〕158号第二条第（二）款：纳税年度内个人投资者从其投资的企业（个人独资企业、合伙企业除外）借款，在该纳税年度终了后既不归还，又未用于企业生产经营的，其未归还的借款可视为企业对个人投资者的红利分配，依照"利息、股息、红利所得"项目计征个人所得税（税率20%）。' },
+  'q15': { module: 'expense', moduleName: '费用与利润', question: '是否存在利润刚好卡在小型微利企业标准线附近（如应纳税所得额刚好300万以下）？', name: '利润临界值享受小微', consequence: '如被认定为人为调节利润骗取税收优惠，将追缴已享受的减免税款并加收滞纳金', taxPolicy: '《企业所得税法》第二十八条；国家税务总局公告2023年第6号', policyContent: '《企业所得税法》第二十八条：符合条件的小型微利企业，减按20%的税率征收企业所得税。国家税务总局公告2023年第6号：对小型微利企业年应纳税所得额不超过100万元的部分，减按25%计入应纳税所得额，按20%的税率缴纳企业所得税；对年应纳税所得额超过100万元但不超过300万元的部分，减按25%计入应纳税所得额，按20%的税率缴纳企业所得税。人为调节利润卡线享受优惠的，税务机关有权进行纳税调整。' },
+  'q16': { module: 'expense', moduleName: '费用与利润', question: '是否存在无合法凭证的费用入账（如白条、无发票的收据等）？', name: '三无费用', consequence: '不合规凭证不得作为税前扣除依据，需调增应纳税所得额补缴企业所得税及滞纳金', taxPolicy: '《企业所得税法》第八条；《发票管理办法》第二十条；国家税务总局公告2018年第28号', policyContent: '《企业所得税法》第八条：企业实际发生的与取得收入有关的、合理的支出，包括成本、费用、税金、损失和其他支出，准予在计算应纳税所得额时扣除。2018年28号公告：企业以外部凭证作为税前扣除依据的，该凭证应当符合法律、行政法规和国家税务总局的规定。' },
+  'q17': { module: 'expense', moduleName: '费用与利润', question: '是否存在连续三年亏损但仍持续经营的情况？', name: '连续三年亏损仍经营', consequence: '列入纳税评估重点关注对象，税务机关可能怀疑存在隐匿收入或转移利润', taxPolicy: '国税发〔2005〕43号；《企业所得税法》第四十七条', policyContent: '国税发〔2005〕43号：税务机关应当对连续三年亏损的企业纳入纳税评估重点关注对象，要求企业提供亏损原因说明和相关证明材料。' },
+  'q18': { module: 'structure', moduleName: '架构与关联交易', question: '是否存在与关联方之间的交易价格明显偏离市场价格？', name: '关联交易价格偏离', consequence: '税务机关可按独立交易原则进行纳税调整，补缴税款并加收利息', taxPolicy: '《企业所得税法》第四十一条；国税发〔2009〕2号', policyContent: '国税发〔2009〕2号《特别纳税调整实施办法（试行）》：税务机关对关联交易进行转让定价调查和调整，可采用可比非受控价格法、再销售价格法、成本加成法、交易净利润法、利润分割法等合理方法。' },
+  'q19': { module: 'structure', moduleName: '架构与关联交易', question: '是否存在通过多层架构转移利润（如在税收洼地设立空壳公司）？', name: '多层架构转移利润', consequence: '无实质性经营的核定征收资格可能被取消，要求查账征收并补缴税款差额及滞纳金', taxPolicy: '国家税务总局公告2019年第48号；《税收征收管理法》第六十三条', policyContent: '2019年48号公告：对税收洼地（如霍尔果斯、海南等）的空壳公司进行清理整顿，无实际经营、无实质办公场所、无雇员的"三无"企业将被取消核定征收资格。《税收征收管理法》第六十三条：对通过虚构交易转移利润的行为，税务机关有权追缴税款并处罚款。' },
+  'q20': { module: 'structure', moduleName: '架构与关联交易', question: '是否存在在税收洼地注册核定征收但无实际经营的情况？', name: '税收洼地核定', consequence: '核定征收资格可能被取消，要求查账征收并补缴税款差额及滞纳金', taxPolicy: '国家税务总局公告2019年第48号', policyContent: '2019年48号公告要求各地税务机关对核定征收进行规范，对不符合核定征收条件的企业，应改为查账征收方式。在税收洼地设立空壳公司享受核定征收的，一经查实将取消核定征收资格并追缴税款差额。' }
+};
+
+// 答案选项文案
+const ANSWER_OPTIONS = ['无此情况', '存在但程度较轻', '存在且较为严重'];
+const ANSWER_COLORS = ['155724', '856404', '721C24']; // 绿/黄/红
 
 // 获取飞书token
 async function getFeishuToken(): Promise<string | null> {
@@ -230,6 +258,98 @@ function createDiffCell(mainText: string, compareText: string, isAfter: boolean)
   });
 }
 
+// 构建五大维度答题详情区块
+function buildDimensionSection(dimName: string, questionKeys: string[], answers: Record<string, number>): any[] {
+  const items: any[] = [];
+  
+  // 维度标题
+  items.push(createHeading2(dimName));
+  
+  // 统计该维度高/中/低风险数量
+  let highCount = 0, mediumCount = 0, lowCount = 0;
+  questionKeys.forEach(key => {
+    const ans = answers[key] ?? 0;
+    if (ans >= 2) highCount++;
+    else if (ans === 1) mediumCount++;
+    else lowCount++;
+  });
+  
+  // 维度概览
+  items.push(new Paragraph({
+    spacing: { after: 200 },
+    children: [
+      new TextRun({ text: `共 ${questionKeys.length} 题`, size: 19, color: '666666' }),
+      new TextRun({ text: `  🔴高风险 ${highCount}项`, bold: true, size: 19, color: RISK_COLORS.high.text }),
+      new TextRun({ text: `  🟡中风险 ${mediumCount}项`, bold: true, size: 19, color: RISK_COLORS.medium.text }),
+      new TextRun({ text: `  🟢低风险 ${lowCount}项`, bold: true, size: 19, color: RISK_COLORS.low.text }),
+    ]
+  }));
+  
+  // 逐题展示
+  questionKeys.forEach((qKey, idx) => {
+    const qInfo = V5_QUESTIONS[qKey];
+    const answer = answers[qKey] ?? 0;
+    const answerText = ANSWER_OPTIONS[answer] || '未知';
+    const answerColor = ANSWER_COLORS[answer] || '333333';
+    const levelText = answer >= 2 ? '高风险' : answer === 1 ? '中风险' : '低风险';
+    const levelColor = answer >= 2 ? RISK_COLORS.high.text : answer === 1 ? RISK_COLORS.medium.text : RISK_COLORS.low.text;
+    const levelIcon = answer >= 2 ? '🔴' : answer === 1 ? '🟡' : '🟢';
+    
+    if (!qInfo) return;
+    
+    // 题目标题
+    items.push(new Paragraph({
+      spacing: { before: 200, after: 80 },
+      shading: { type: ShadingType.CLEAR, color: 'auto', fill: 'F7FAFC' },
+      children: [
+        new TextRun({ text: `${idx + 1}. ${qInfo.question}`, bold: true, size: 20, color: '2d3748' }),
+      ]
+    }));
+    
+    // 用户选项 + 风险判定
+    items.push(new Paragraph({
+      spacing: { after: 60, left: 200 },
+      children: [
+        new TextRun({ text: '您的选择：', bold: true, size: 18, color: '555555' }),
+        new TextRun({ text: answerText, bold: true, size: 18, color: answerColor }),
+        new TextRun({ text: '   |   ', size: 18, color: 'cccccc' }),
+        new TextRun({ text: '风险判定：', bold: true, size: 18, color: '555555' }),
+        new TextRun({ text: `${levelIcon} ${levelText}`, bold: true, size: 18, color: levelColor }),
+      ]
+    }));
+    
+    // 风险影响（仅中高风险显示）
+    if (answer >= 1) {
+      items.push(new Paragraph({
+        spacing: { after: 60, left: 200 },
+        children: [
+          new TextRun({ text: '风险影响：', bold: true, size: 18, color: '555555' }),
+          new TextRun({ text: qInfo.consequence, size: 18, color: '444444' }),
+        ]
+      }));
+    }
+    
+    // 政策依据及具体条文
+    items.push(new Paragraph({
+      spacing: { after: 60, left: 200 },
+      children: [
+        new TextRun({ text: '政策依据：', bold: true, size: 18, color: '555555' }),
+        new TextRun({ text: qInfo.taxPolicy, size: 18, color: '2b6cb0' }),
+      ]
+    }));
+    
+    // 政策具体条文
+    items.push(new Paragraph({
+      spacing: { after: 160, left: 400 },
+      children: [
+        new TextRun({ text: qInfo.policyContent, size: 17, color: '666666', italics: true }),
+      ]
+    }));
+  });
+  
+  return items;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -305,6 +425,16 @@ export async function GET(request: NextRequest) {
     const reportContent = extractJsonField(record['报告内容']);
     const financialIndicators = extractJsonField(record['财务指标']);
     const crossValidation = extractJsonField(record['交叉验证结果']);
+    
+    // 读取问卷明细（20道题答案）
+    const surveyDetailRaw = extractJsonField(record['问卷明细']);
+    const surveyAnswers: Record<string, number> = {};
+    if (surveyDetailRaw && typeof surveyDetailRaw === 'object') {
+      for (let i = 1; i <= 20; i++) {
+        const key = `q${i}`;
+        surveyAnswers[key] = Number(surveyDetailRaw[key]) || 0;
+      }
+    }
     // 提取并转换企查查工商信息
     // 兼容三种格式：旧格式(Result=基础信息) / 410+213格式(basicInfo+annualReport) / 2006合作风险排查格式(Result.VerifyResult+Data)
     const rawBusinessInfo = extractJsonField(record['工商信息']);
@@ -1010,6 +1140,18 @@ export async function GET(request: NextRequest) {
           }))
         ];
         sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+        // 数据来源备注
+        sections.push(new Paragraph({
+          children: [
+            new TextRun({
+              text: '注：股东信息来源于公开工商数据，持股比例、出资额、出资日期等详细信息因数据源限制可能不完整，如需完整信息请进一步查询。',
+              size: 18,
+              color: '888888',
+              italics: true
+            })
+          ],
+          spacing: { before: 120, after: 200 }
+        }));
       }
 
       // 2. 主要人员
@@ -1651,13 +1793,18 @@ export async function GET(request: NextRequest) {
 
     // 读取LOGO图片
     let logoImageBuffer: Buffer | null = null;
+    let qrImageBuffer: Buffer | null = null;
     try {
       const logoPath = path.join(process.cwd(), 'public', 'logo.jpg');
       if (fs.existsSync(logoPath)) {
         logoImageBuffer = fs.readFileSync(logoPath);
       }
+      const qrPath = path.join(process.cwd(), 'public', 'wechat-qr.png');
+      if (fs.existsSync(qrPath)) {
+        qrImageBuffer = fs.readFileSync(qrPath);
+      }
     } catch (e) {
-      // LOGO读取失败不影响报告生成
+      // 图片读取失败不影响报告生成
     }
 
     // 构建Word文档
@@ -1670,35 +1817,39 @@ export async function GET(request: NextRequest) {
         },
         children: [
           // ========== 封面 ==========
-          // LOGO
+          // LOGO（右上角，小尺寸）
           ...(logoImageBuffer ? [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { before: 400, after: 400 },
+            alignment: AlignmentType.RIGHT,
+            spacing: { before: 0, after: 600 },
             children: [new ImageRun({
               data: logoImageBuffer,
-              transformation: { width: 150, height: 150 },
+              transformation: { width: 80, height: 80 },
               type: 'jpg'
             })]
           })] : []),
 
-          createTitle('财税风险检测报告', 44, '1a56db'),
+          // 标题
+          new Paragraph({ spacing: { before: 1200 }, children: [] }),
+          createTitle('财税风险检测报告', 52, '1a56db'),
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 100 },
-            children: [new TextRun({ text: 'Tax Risk Assessment Report', size: 20, color: '718096', italics: true })]
+            children: [new TextRun({ text: 'Tax Risk Assessment Report', size: 22, color: '718096', italics: true })]
           }),
-          new Paragraph({ spacing: { before: 600, after: 200 }, children: [] }),
+          new Paragraph({ spacing: { before: 800, after: 200 }, children: [] }),
+          
+          // 企业名称
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 300 },
-            children: [new TextRun({ text: companyName || '__________', bold: true, size: 32, color: '2d3748' })]
+            children: [new TextRun({ text: companyName || '__________', bold: true, size: 36, color: '2d3748' })]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 100 },
-            children: [new TextRun({ text: `统一信用代码：${creditCode || '__________'}`, size: 21, color: '555555' })]
+            children: [new TextRun({ text: `统一信用代码：${creditCode || '__________'}`, size: 22, color: '555555' })]
           }),
-          new Paragraph({ spacing: { before: 400, after: 200 }, children: [] }),
+          new Paragraph({ spacing: { before: 600, after: 200 }, children: [] }),
 
           // 综合得分展示
           new Table({
@@ -1713,11 +1864,11 @@ export async function GET(request: NextRequest) {
                     children: [
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: '综合得分', bold: true, size: 21, color: riskColor.text })]
+                        children: [new TextRun({ text: '综合得分', bold: true, size: 22, color: riskColor.text })]
                       }),
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: totalScore.toFixed(1), bold: true, size: 48, color: riskColor.text })]
+                        children: [new TextRun({ text: totalScore.toFixed(1), bold: true, size: 52, color: riskColor.text })]
                       })
                     ]
                   }),
@@ -1727,11 +1878,11 @@ export async function GET(request: NextRequest) {
                     children: [
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: '风险等级', bold: true, size: 21, color: '555555' })]
+                        children: [new TextRun({ text: '风险等级', bold: true, size: 22, color: '555555' })]
                       }),
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: riskLevel || '评估中', bold: true, size: 32, color: riskColor.text })]
+                        children: [new TextRun({ text: riskLevel || '评估中', bold: true, size: 36, color: riskColor.text })]
                       })
                     ]
                   })
@@ -1740,14 +1891,19 @@ export async function GET(request: NextRequest) {
             ]
           }),
 
-          new Paragraph({ spacing: { before: 600, after: 200 }, children: [] }),
+          new Paragraph({ spacing: { before: 1000, after: 200 }, children: [] }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `检测日期：${testTime || new Date().toLocaleDateString('zh-CN')}`, size: 20, color: '888888' })]
+            children: [new TextRun({ text: `检测日期：${testTime || new Date().toLocaleDateString('zh-CN')}`, size: 21, color: '888888' })]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: '慧根堂财税风险咨询 · 专业财税风控服务', size: 18, color: 'aaaaaa' })]
+            children: [new TextRun({ text: '慧根堂财税风险咨询 · 专业财税风控服务', size: 19, color: 'aaaaaa' })]
+          }),
+
+          // 封面分页
+          new Paragraph({
+            children: [new PageBreak()]
           }),
 
           // ========== 一、企业基本信息 ==========
@@ -1955,75 +2111,32 @@ export async function GET(request: NextRequest) {
             ]
           }),
 
-          // 风险项逐条列示（带税收政策）
-          new Paragraph({ spacing: { before: 400, after: 100 }, children: [] }),
-          createHeading2('风险项明细与政策依据'),
-          
-          // 高风险项逐条列示
-          ...(reportContent?.highRiskItems?.length ? [
-            new Paragraph({
-              spacing: { before: 200, after: 100 },
-              children: [new TextRun({ text: '🔴 高风险项', bold: true, size: 22, color: RISK_COLORS.high.text })]
-            }),
-            ...(reportContent.highRiskItems.flatMap((item: any, idx: number) => [
-              new Paragraph({
-                spacing: { after: 40, left: 200 },
-                children: [
-                  new TextRun({ text: `${idx + 1}. ${item.name || ''}`, bold: true, size: 20, color: RISK_COLORS.high.text }),
-                  new TextRun({ text: `  [${item.moduleName || ''}]`, size: 18, color: '888888' }),
-                ]
-              }),
-              new Paragraph({
-                spacing: { after: 120, left: 400 },
-                children: [
-                  new TextRun({ text: '涉嫌政策：', bold: true, size: 18, color: '666666' }),
-                  new TextRun({ text: item.taxPolicy || '-', size: 18, color: '555555' })
-                ]
-              })
-            ]))
-          ] : []),
+          // ========== 三、五大维度答题详情 ==========
+          createHeading1('三、五大维度答题详情'),
+          createParagraph('以下为本次检测20道问卷题目的答题情况、风险等级判定及相关税收政策依据，按五大维度分组展示。'),
 
-          // 中风险项逐条列示
-          ...(reportContent?.mediumRiskItems?.length ? [
-            new Paragraph({
-              spacing: { before: 200, after: 100 },
-              children: [new TextRun({ text: '🟡 中风险项', bold: true, size: 22, color: RISK_COLORS.medium.text })]
-            }),
-            ...(reportContent.mediumRiskItems.flatMap((item: any, idx: number) => [
-              new Paragraph({
-                spacing: { after: 40, left: 200 },
-                children: [
-                  new TextRun({ text: `${idx + 1}. ${item.name || ''}`, bold: true, size: 20, color: RISK_COLORS.medium.text }),
-                  new TextRun({ text: `  [${item.moduleName || ''}]`, size: 18, color: '888888' }),
-                ]
-              }),
-              new Paragraph({
-                spacing: { after: 120, left: 400 },
-                children: [
-                  new TextRun({ text: '涉嫌政策：', bold: true, size: 18, color: '666666' }),
-                  new TextRun({ text: item.taxPolicy || '-', size: 18, color: '555555' })
-                ]
-              })
-            ]))
-          ] : []),
+          // 维度一：申报与纳税合规
+          ...buildDimensionSection('申报与纳税合规',
+            ['q1', 'q2', 'q3', 'q4'], surveyAnswers),
 
-          // 低风险项（简要列示）
-          ...(reportContent?.lowRiskItems?.length ? [
-            new Paragraph({
-              spacing: { before: 200, after: 100 },
-              children: [new TextRun({ text: '🟢 合规项（无风险）', bold: true, size: 22, color: RISK_COLORS.low.text })]
-            }),
-            new Paragraph({
-              spacing: { after: 100, left: 200 },
-              children: [
-                new TextRun({ text: `共 ${reportContent.lowRiskItems.length} 项合规：`, size: 19, color: '555555' }),
-                new TextRun({ text: reportContent.lowRiskItems.join('、'), size: 19, color: RISK_COLORS.low.text })
-              ]
-            })
-          ] : []),
+          // 维度二：发票管理
+          ...buildDimensionSection('发票管理',
+            ['q5', 'q6', 'q7', 'q8'], surveyAnswers),
 
-          // ========== 三、详细风险分析 ==========
-          createHeading1('三、详细风险分析'),
+          // 维度三：收入与成本
+          ...buildDimensionSection('收入与成本',
+            ['q9', 'q10', 'q11', 'q12'], surveyAnswers),
+
+          // 维度四：费用与利润
+          ...buildDimensionSection('费用与利润',
+            ['q13', 'q14', 'q15', 'q16', 'q17'], surveyAnswers),
+
+          // 维度五：架构与关联交易
+          ...buildDimensionSection('架构与关联交易',
+            ['q18', 'q19', 'q20'], surveyAnswers),
+
+          // ========== 四、详细风险分析 ==========
+          createHeading1('四、详细风险分析'),
 
           // 高风险项
           ...(reportContent?.highRiskItems?.length ? [
@@ -2123,8 +2236,8 @@ export async function GET(request: NextRequest) {
             createParagraph(`共 ${reportContent.lowRiskItems.length} 项合规：${reportContent.lowRiskItems.join('、')}`)
           ] : []),
 
-          // ========== 四、财务指标分析 ==========
-          createHeading1('四、财务指标分析'),
+          // ========== 五、财务指标分析 ==========
+          createHeading1('五、财务指标分析'),
           createParagraph('以下为企业核心财税指标，结合行业基准进行对比分析。'),
 
           new Table({
@@ -2206,8 +2319,8 @@ export async function GET(request: NextRequest) {
             ]
           }),
 
-          // ========== 五、交叉验证结果 ==========
-          createHeading1('五、交叉验证结果'),
+          // ========== 六、交叉验证结果 ==========
+          createHeading1('六、交叉验证结果'),
 
           reportContent?.crossValidation?.length ? (
             new Table({
@@ -2250,22 +2363,79 @@ export async function GET(request: NextRequest) {
             })
           ) : createParagraph('各项指标交叉验证未发现明显异常。'),
 
-          // ========== 六、建议与说明 ==========
-          createHeading1('六、建议与说明'),
+          // ========== 七、建议与说明 ==========
+          createHeading1('七、建议与说明'),
           createParagraph('1. 本报告基于企业填写的问卷数据及公开工商信息进行风险评估，仅供参考。'),
           createParagraph('2. 高风险项目建议尽快开展专项自查，必要时寻求专业财税顾问的帮助。'),
           createParagraph('3. 中风险项目应纳入日常税务管理重点关注范围，定期复核。'),
           createParagraph('4. 低风险项目仍需保持合规意识，持续做好日常税务管理工作。'),
           createParagraph('5. 如需进一步的税务风险诊断和应对方案，请联系专业财税顾问。'),
 
-          new Paragraph({ spacing: { before: 600, after: 200 }, children: [] }),
+          new Paragraph({ spacing: { before: 800, after: 200 }, children: [] }),
+          
+          // 分隔线
           new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [new TextRun({ text: '慧根堂财税风险咨询', size: 20, color: '666666' })]
+            border: {
+              top: { style: BorderStyle.SINGLE, size: 6, color: '1a56db', space: 4 }
+            },
+            spacing: { after: 300 },
+            children: []
+          }),
+
+          // 落款 - 联系方式
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 80 },
+            children: [new TextRun({ text: '慧根堂财税风险咨询', bold: true, size: 24, color: '1a56db' })]
           }),
           new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            children: [new TextRun({ text: '专业财税风控服务提供商', size: 18, color: '999999' })]
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 60 },
+            children: [new TextRun({ text: '专业财税风控服务提供商', size: 19, color: '718096' })]
+          }),
+          
+          new Paragraph({ spacing: { before: 200, after: 100 }, children: [] }),
+          
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 60 },
+            children: [
+              new TextRun({ text: '联系人：', bold: true, size: 20, color: '555555' }),
+              new TextRun({ text: '张老师', size: 20, color: '2d3748' })
+            ]
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 60 },
+            children: [
+              new TextRun({ text: '咨询电话：', bold: true, size: 20, color: '555555' }),
+              new TextRun({ text: '138-1294-3969', size: 20, color: '2d3748' })
+            ]
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 100 },
+            children: [
+              new TextRun({ text: '微信咨询：', bold: true, size: 20, color: '555555' }),
+              new TextRun({ text: '扫码添加专业顾问', size: 20, color: '2d3748' })
+            ]
+          }),
+
+          // 微信二维码
+          ...(qrImageBuffer ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 100 },
+            children: [new ImageRun({
+              data: qrImageBuffer,
+              transformation: { width: 130, height: 130 },
+              type: 'png'
+            })]
+          })] : []),
+
+          new Paragraph({ spacing: { before: 200, after: 200 }, children: [] }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: '本报告仅供参考，不构成正式税务意见。具体涉税事项请以税务机关认定为准。', size: 16, color: 'aaaaaa' })]
           })
         ]
       }]
