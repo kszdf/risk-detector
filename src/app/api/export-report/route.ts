@@ -1817,43 +1817,62 @@ export async function GET(request: NextRequest) {
         },
         children: [
           // ========== 封面 ==========
-          // LOGO（右上角，小尺寸）
+          // 顶部留白
+          new Paragraph({ spacing: { before: 600 }, children: [] }),
+
+          // LOGO（顶部居中，品牌锚点）
           ...(logoImageBuffer ? [new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            spacing: { before: 0, after: 600 },
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
             children: [new ImageRun({
               data: logoImageBuffer,
-              transformation: { width: 80, height: 80 },
+              transformation: { width: 120, height: 120 },
               type: 'jpg'
             })]
           })] : []),
 
-          // 标题
-          new Paragraph({ spacing: { before: 1200 }, children: [] }),
-          createTitle('财税风险检测报告', 52, '1a56db'),
+          // 主标题
+          createTitle('财税风险检测报告', 48, '1a56db'),
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { after: 100 },
-            children: [new TextRun({ text: 'Tax Risk Assessment Report', size: 22, color: '718096', italics: true })]
+            children: [new TextRun({ text: 'Tax Risk Assessment Report', size: 20, color: '718096', italics: true })]
           }),
-          new Paragraph({ spacing: { before: 800, after: 200 }, children: [] }),
-          
-          // 企业名称
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 300 },
-            children: [new TextRun({ text: companyName || '__________', bold: true, size: 36, color: '2d3748' })]
-          }),
-          new Paragraph({
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 100 },
-            children: [new TextRun({ text: `统一信用代码：${creditCode || '__________'}`, size: 22, color: '555555' })]
-          }),
-          new Paragraph({ spacing: { before: 600, after: 200 }, children: [] }),
 
-          // 综合得分展示
+          // 分隔线（视觉停顿，区分标题区与企业信息区）
+          new Paragraph({ spacing: { before: 500, after: 500 }, children: [] }),
           new Table({
-            width: { size: 60, type: WidthType.PERCENTAGE },
+            width: { size: 25, type: WidthType.PERCENTAGE },
+            alignment: AlignmentType.CENTER,
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    shading: { type: ShadingType.CLEAR, color: 'auto', fill: '1a56db' },
+                    children: [new Paragraph({ children: [new TextRun({ text: ' ', size: 2 })] })]
+                  })
+                ]
+              })
+            ]
+          }),
+          new Paragraph({ spacing: { before: 500, after: 200 }, children: [] }),
+
+          // 企业名称（第二层级，报告主体）
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
+            children: [new TextRun({ text: companyName || '__________', bold: true, size: 32, color: '2d3748' })]
+          }),
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 100 },
+            children: [new TextRun({ text: `统一社会信用代码：${creditCode || '__________'}`, size: 20, color: '718096' })]
+          }),
+
+          // 综合得分卡片（视觉重心，报告核心结论）
+          new Paragraph({ spacing: { before: 1000, after: 200 }, children: [] }),
+          new Table({
+            width: { size: 55, type: WidthType.PERCENTAGE },
             alignment: AlignmentType.CENTER,
             rows: [
               new TableRow({
@@ -1864,11 +1883,13 @@ export async function GET(request: NextRequest) {
                     children: [
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: '综合得分', bold: true, size: 22, color: riskColor.text })]
+                        spacing: { before: 120 },
+                        children: [new TextRun({ text: '综合得分', bold: true, size: 20, color: riskColor.text })]
                       }),
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: totalScore.toFixed(1), bold: true, size: 52, color: riskColor.text })]
+                        spacing: { after: 120 },
+                        children: [new TextRun({ text: totalScore.toFixed(1), bold: true, size: 48, color: riskColor.text })]
                       })
                     ]
                   }),
@@ -1878,11 +1899,13 @@ export async function GET(request: NextRequest) {
                     children: [
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: '风险等级', bold: true, size: 22, color: '555555' })]
+                        spacing: { before: 120 },
+                        children: [new TextRun({ text: '风险等级', bold: true, size: 20, color: '718096' })]
                       }),
                       new Paragraph({
                         alignment: AlignmentType.CENTER,
-                        children: [new TextRun({ text: riskLevel || '评估中', bold: true, size: 36, color: riskColor.text })]
+                        spacing: { after: 120 },
+                        children: [new TextRun({ text: riskLevel || '评估中', bold: true, size: 32, color: riskColor.text })]
                       })
                     ]
                   })
@@ -1891,14 +1914,16 @@ export async function GET(request: NextRequest) {
             ]
           }),
 
-          new Paragraph({ spacing: { before: 1000, after: 200 }, children: [] }),
+          // 底部信息（检测日期 + 机构名）
+          new Paragraph({ spacing: { before: 1200, after: 200 }, children: [] }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: `检测日期：${testTime || new Date().toLocaleDateString('zh-CN')}`, size: 21, color: '888888' })]
+            spacing: { after: 80 },
+            children: [new TextRun({ text: `检测日期：${testTime || new Date().toLocaleDateString('zh-CN')}`, size: 20, color: 'a0aec0' })]
           }),
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            children: [new TextRun({ text: '慧根堂财税风险咨询 · 专业财税风控服务', size: 19, color: 'aaaaaa' })]
+            children: [new TextRun({ text: '慧根堂财税风险咨询', size: 18, color: 'cbd5e0' })]
           }),
 
           // 封面分页
