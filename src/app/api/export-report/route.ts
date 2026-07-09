@@ -2252,7 +2252,64 @@ export async function GET(request: NextRequest) {
 
           // ========== 五、财务指标分析 ==========
           createHeading1('五、财务指标分析'),
-          createParagraph('以下为企业核心财税指标，结合行业基准进行对比分析。'),
+
+          // 5.1 客户填写的财务数据
+          createHeading2('5.1 客户填写的财务数据'),
+          createParagraph('以下为客户在检测时填写的原始财务数据：'),
+
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  createHeaderCell('数据项目'),
+                  createHeaderCell('金额（万元）')
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('营业收入', { bold: true }),
+                  createDataCell(revenue ? `${revenue.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('营业成本', { bold: true }),
+                  createDataCell(cost ? `${cost.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('实缴增值税', { bold: true }),
+                  createDataCell(vatPaid ? `${vatPaid.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('实缴企业所得税', { bold: true }),
+                  createDataCell(citPaid ? `${citPaid.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('总资产', { bold: true }),
+                  createDataCell(totalAssets ? `${totalAssets.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              }),
+              new TableRow({
+                children: [
+                  createDataCell('总负债', { bold: true }),
+                  createDataCell(totalLiabilities ? `${totalLiabilities.toFixed(2)}` : '-', { align: 'center' })
+                ]
+              })
+            ]
+          }),
+
+          createParagraph(''),
+
+          // 5.2 财务指标与行业标准对比
+          createHeading2('5.2 财务指标与行业标准对比'),
+          createParagraph('基于上述财务数据计算核心指标，结合行业基准进行对比分析：'),
 
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
@@ -2263,14 +2320,6 @@ export async function GET(request: NextRequest) {
                   createHeaderCell('企业数值'),
                   createHeaderCell('行业正常范围'),
                   createHeaderCell('评估结果')
-                ]
-              }),
-              new TableRow({
-                children: [
-                  createDataCell('营业收入', { bold: true }),
-                  createDataCell(revenue ? `${revenue.toFixed(2)} 万元` : '-', { align: 'center' }),
-                  createDataCell('-', { align: 'center' }),
-                  createDataCell('-', { align: 'center' })
                 ]
               }),
               new TableRow({
