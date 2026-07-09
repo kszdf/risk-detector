@@ -1840,22 +1840,11 @@ export async function GET(request: NextRequest) {
           }),
 
           // 分隔线（视觉停顿，区分标题区与企业信息区）
-          new Paragraph({ spacing: { before: 500, after: 500 }, children: [] }),
-          new Table({
-            width: { size: 25, type: WidthType.PERCENTAGE },
+          new Paragraph({
             alignment: AlignmentType.CENTER,
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    shading: { type: ShadingType.CLEAR, color: 'auto', fill: '1a56db' },
-                    children: [new Paragraph({ children: [new TextRun({ text: ' ', size: 2 })] })]
-                  })
-                ]
-              })
-            ]
+            spacing: { before: 500, after: 500 },
+            children: [new TextRun({ text: '——————————', size: 20, color: 'cbd5e0' })]
           }),
-          new Paragraph({ spacing: { before: 500, after: 200 }, children: [] }),
 
           // 企业名称（第二层级，报告主体）
           new Paragraph({
