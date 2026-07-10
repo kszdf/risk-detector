@@ -392,7 +392,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '未找到该检测报告' }, { status: 404 });
     }
 
-    const record = queryData.data.items[0].fields;
+    const recordItem = queryData.data.items[0];
+    const record = recordItem.fields;
+    const recordId = recordItem.record_id;
+
+    // 检查是否已有完整报告附件：有就直接从飞书下载返回，避免重复生成
+    const reportAttachment = record['完整报告'];
+    if (reportAttachment && Array.isArray(reportAttachment) && reportAttachment.length > 0) {
+      const fileToken = reportAttachment[0].file_token;
+      const fileName = reportAttachment[0].name || '财税风险检测报告.docx';
+      if (fileToken) {
+        try {
+          const downloadRes = await fetch(`https://open.feishu.cn/open-apis/drive/v1/medias/${fileToken}/download`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (downloadRes.ok) {
+            const fileBuffer = await downloadRes.arrayBuffer();
+            return new NextResponse(Buffer.from(fileBuffer), {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+                'X-Report-Source': 'feishu-attachment'
+              }
+            });
+          }
+        } catch (e) {
+          // 下载失败，继续走生成流程
+          console.warn('从飞书下载附件失败，将重新生成报告:', e);
+        }
+      }
+    }
 
     // 提取数据
     const companyName = extractFeishuText(record['企业名称']);
@@ -2507,6 +2537,51 @@ export async function GET(request: NextRequest) {
 
     const buffer = await Packer.toBuffer(doc);
     const fileName = `${companyName || '企业'}_财税风险检测报告_${testTime || ''}.docx`.replace(/\s+/g, '_');
+
+    // 上传到飞书多维表附件字段，避免下次重复生成
+    try {
+      if (token && recordId) {
+        // 1. 上传文件到飞书云空间
+        const formData = new FormData();
+        formData.append('file_name', fileName);
+        formData.append('parent_type', 'bitable_file');
+        formData.append('parent_node', FEISHU_BASE_TOKEN);
+        formData.append('size', String(buffer.length));
+        // 将Buffer转成Blob
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        formData.append('file', blob, fileName);
+
+        const uploadRes = await fetch('https://open.feishu.cn/open-apis/drive/v1/medias/upload_all', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+
+        if (uploadData.code === 0 && uploadData.data?.file_token) {
+          const fileToken = uploadData.data.file_token;
+
+          // 2. 更新多维表记录，写入附件字段
+          await fetch(`https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records/${recordId}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fields: {
+                '完整报告': [{ file_token: fileToken, name: fileName }]
+              }
+            })
+          });
+        }
+      }
+    } catch (uploadErr) {
+      // 上传失败不影响返回报告，只打日志
+      console.warn('上传报告到飞书附件失败:', uploadErr);
+    }
 
     return new NextResponse(buffer, {
       status: 200,

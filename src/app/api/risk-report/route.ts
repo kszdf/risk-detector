@@ -1136,10 +1136,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 分离高/中/低风险项
+    // 分离高/中/低风险项（均返回完整详情）
     const highRiskItems = riskItems.filter(i => i.level === '🔴');
     const mediumRiskItems = riskItems.filter(i => i.level === '🟡');
-    const lowRiskItems = riskItems.filter(i => i.level === '🟢').map(i => i.name);
+    const lowRiskItems = riskItems.filter(i => i.level === '🟢');
+
+    // 构建完整答题记录（20题全量展示，含题目、用户答案、判定、详情）
+    const questionnaireAnswers = riskItems.map(item => ({
+      key: item.source,
+      question: V5_QUESTION_MAPPING[item.source.replace('问卷', '')]?.question || item.name,
+      answer: item.level === '🔴' ? '存在且严重' : item.level === '🟡' ? '存在但较轻' : '无此情况',
+      answerValue: item.level === '🔴' ? 2 : item.level === '🟡' ? 1 : 0,
+      level: item.level,
+      levelText: item.level === '🔴' ? '高风险' : item.level === '🟡' ? '中风险' : '低风险',
+      name: item.name,
+      moduleName: item.moduleName,
+      impact: item.impact,
+      consequence: item.consequence,
+      taxPolicy: item.taxPolicy
+    }));
 
     // 综合风险等级
     const { level: overallLevel, icon: levelIcon } = determineOverallLevel(redCount, yellowCount);
@@ -1249,6 +1264,7 @@ export async function GET(req: NextRequest) {
           highRiskItems,
           mediumRiskItems,
           lowRiskItems,
+          questionnaireAnswers,
           trendWarnings: [],
           crossValidation,
           industryBenchmarks,
@@ -1326,6 +1342,7 @@ export async function GET(req: NextRequest) {
         highRiskItems,
         mediumRiskItems,
         lowRiskItems,
+        questionnaireAnswers,
         trendWarnings: [],
         crossValidation,
         industryBenchmarks,
