@@ -1920,8 +1920,9 @@ export async function GET(request: NextRequest) {
             children: [new PageBreak()]
           }),
 
-          // ========== 一、企业基本信息 ==========
-          createHeading1('一、企业基本信息'),
+          // ========== 一、企业档案 ==========
+          createHeading1('一、企业档案'),
+          createHeading2('检测基本信息'),
           createInfoRow('企业名称', companyName),
           createInfoRow('统一信用代码', creditCode),
           createInfoRow('所属行业', industry),
