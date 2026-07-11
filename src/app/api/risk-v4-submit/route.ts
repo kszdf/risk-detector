@@ -992,14 +992,11 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   const contactPhone = String(body.contactPhone || '');
   const period = financialData.periodValue;
 
-  // 调用企查查获取工商信息（用企业名称或统一信用代码查询）
-  const qccKeyword = enterpriseName || creditCode;
-  let qccCompanyInfo = qccKeyword ? await getQccCompanyInfo(qccKeyword) : null;
-
-  // ===== 企业名称与信用代码交叉一致性校验 =====
-  // 校验结果：match=一致 | mismatch=不一致 | one_empty=只填了一个（已自动补全）| none=都没填
+  // 提交时不调用企查查（Vercel海外节点访问国内API不稳定）
+  // 工商信息查询、名称/代码交叉校验统一由国内定时脚本（qcc-sync.js）异步回填
+  // 通常10分钟内完成，回填后「工商信息」和「名称代码校验状态」字段会更新
   let nameCreditCheck = {
-    status: 'none',
+    status: 'pending',
     qccName: '',
     qccCreditCode: '',
     userEnteredName: enterpriseName,
@@ -1007,29 +1004,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     finalName: enterpriseName,
     finalCreditCode: creditCode
   };
-
-  if (qccCompanyInfo && (enterpriseName || creditCode)) {
-    const qccName = qccCompanyInfo.name || '';
-    const qccCreditCode = qccCompanyInfo.creditCode || '';
-
-    if (enterpriseName && creditCode) {
-      // 两个都填了，比对一致性
-      const nameMatched = qccName && (enterpriseName === qccName || qccName.includes(enterpriseName) || enterpriseName.includes(qccName));
-      const codeMatched = qccCreditCode && creditCode === qccCreditCode;
-
-      if (nameMatched && codeMatched) {
-        nameCreditCheck = { status: 'match', qccName, qccCreditCode, userEnteredName: enterpriseName, userEnteredCreditCode: creditCode, finalName: qccName, finalCreditCode: qccCreditCode };
-      } else {
-        nameCreditCheck = { status: 'mismatch', qccName, qccCreditCode, userEnteredName: enterpriseName, userEnteredCreditCode: creditCode, finalName: qccName, finalCreditCode: qccCreditCode };
-      }
-    } else if (enterpriseName && !creditCode && qccCreditCode) {
-      // 只填了名称，自动回填信用代码
-      nameCreditCheck = { status: 'one_empty', qccName, qccCreditCode, userEnteredName: enterpriseName, userEnteredCreditCode: '', finalName: qccName, finalCreditCode: qccCreditCode };
-    } else if (creditCode && !enterpriseName && qccName) {
-      // 只填了信用代码，自动回填企业名称
-      nameCreditCheck = { status: 'one_empty', qccName, qccCreditCode, userEnteredName: '', userEnteredCreditCode: creditCode, finalName: qccName, finalCreditCode: qccCreditCode };
-    }
-  }
+  const qccCompanyInfo = null;
 
   // 解析20题三档答案（0=无此情况, 1=存在但较轻, 2=存在且严重）
   const riskAnswersRaw = body.riskAnswers as Record<string, unknown> || {};
@@ -1080,6 +1055,7 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     'match': '一致',
     'mismatch': '不一致',
     'one_empty': '自动补全',
+    'pending': '待校验',
     'none': '未校验'
   };
   fields['名称代码校验状态'] = statusMap[nameCreditCheck.status] || '未校验';
