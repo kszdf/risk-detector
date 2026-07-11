@@ -62,6 +62,50 @@ const V5_QUESTIONS: Record<string, { module: string; moduleName: string; questio
 const ANSWER_OPTIONS = ['无此情况', '存在但程度较轻', '存在且较为严重'];
 const ANSWER_COLORS = ['38a169', 'd69e2e', 'c53030']; // 绿/黄/红（柔和版）
 
+// 行业基准数据（7个行业 + 兜底）
+const INDUSTRY_BENCHMARKS: Record<string, {
+  grossMargin: { min: number; max: number };
+  vatRate: { min: number; max: number };
+  citRate: { min: number; max: number };
+}> = {
+  '制造业': { grossMargin: { min: 25, max: 40 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.8, max: 2.0 } },
+  '批发零售业': { grossMargin: { min: 15, max: 30 }, vatRate: { min: 1.0, max: 3.0 }, citRate: { min: 0.3, max: 1.5 } },
+  '建筑工程业': { grossMargin: { min: 8, max: 18 }, vatRate: { min: 1.5, max: 3.5 }, citRate: { min: 0.5, max: 1.5 } },
+  '商务服务业': { grossMargin: { min: 40, max: 60 }, vatRate: { min: 2.5, max: 5.0 }, citRate: { min: 1.0, max: 3.0 } },
+  '生活服务业': { grossMargin: { min: 30, max: 50 }, vatRate: { min: 2.0, max: 4.5 }, citRate: { min: 0.5, max: 2.0 } },
+  '科技互联网业': { grossMargin: { min: 50, max: 70 }, vatRate: { min: 1.5, max: 4.0 }, citRate: { min: 0.8, max: 2.5 } },
+  '其他行业': { grossMargin: { min: 20, max: 40 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } },
+  '建筑业': { grossMargin: { min: 8, max: 18 }, vatRate: { min: 1.5, max: 3.5 }, citRate: { min: 0.5, max: 1.5 } },
+  '科技互联网': { grossMargin: { min: 50, max: 70 }, vatRate: { min: 1.5, max: 4.0 }, citRate: { min: 0.8, max: 2.5 } },
+  '其他': { grossMargin: { min: 20, max: 40 }, vatRate: { min: 2.0, max: 4.0 }, citRate: { min: 0.5, max: 2.0 } }
+};
+
+// 计算行业基准对比结果
+function calcIndustryBenchmark(industry: string, grossMargin: number, vatRate: number, citRate: number) {
+  const bench = INDUSTRY_BENCHMARKS[industry] || INDUSTRY_BENCHMARKS['其他行业'];
+  
+  const gmStatus = grossMargin === 0 ? '-' :
+    grossMargin < bench.grossMargin.min ? '偏低' :
+    grossMargin > bench.grossMargin.max ? '偏高' : '正常';
+  
+  const vatStatus = vatRate === 0 ? '-' :
+    vatRate < bench.vatRate.min ? '偏低预警' :
+    vatRate > bench.vatRate.max ? '偏高' : '正常';
+  
+  const citStatus = citRate === 0 ? '-' :
+    citRate < bench.citRate.min ? '偏低预警' :
+    citRate > bench.citRate.max ? '偏高' : '正常';
+  
+  return {
+    grossMarginBenchmark: bench.grossMargin,
+    vatRateBenchmark: bench.vatRate,
+    citRateBenchmark: bench.citRate,
+    grossMarginStatus: gmStatus,
+    vatRateStatus: vatStatus,
+    citRateStatus: citStatus
+  };
+}
+
 // 获取飞书token
 async function getFeishuToken(): Promise<string | null> {
   const res = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
@@ -455,6 +499,10 @@ export async function GET(request: NextRequest) {
     const reportContent = extractJsonField(record['报告内容']);
     const financialIndicators = extractJsonField(record['财务指标']);
     const crossValidation = extractJsonField(record['交叉验证结果']);
+    
+    // 计算行业基准对比（不依赖飞书字段结构，直接本地计算，避免结构不一致导致显示为空）
+    const industryBench = calcIndustryBenchmark(industry, grossMargin, vatRate, citRate);
+    const benchData = { ...industryBench, ...(financialIndicators || {}) };
     
     // 读取问卷明细（20道题答案）
     const surveyDetailRaw = extractJsonField(record['问卷明细']);
@@ -2357,12 +2405,12 @@ export async function GET(request: NextRequest) {
                 children: [
                   createDataCell('毛利率', { bold: true }),
                   createDataCell(grossMargin ? `${grossMargin.toFixed(2)}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.grossMarginBenchmark ? `${financialIndicators.grossMarginBenchmark.min}% - ${financialIndicators.grossMarginBenchmark.max}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.grossMarginStatus || '-', {
+                  createDataCell(benchData.grossMarginBenchmark ? `${benchData.grossMarginBenchmark.min}% - ${benchData.grossMarginBenchmark.max}%` : '-', { align: 'center' }),
+                  createDataCell(benchData.grossMarginStatus || '-', {
                     align: 'center',
-                    color: financialIndicators?.grossMarginStatus === '正常' ? '38a169' :
-                           financialIndicators?.grossMarginStatus === '偏低' ? 'd69e2e' :
-                           financialIndicators?.grossMarginStatus === '偏高' ? 'dd6b20' : '333333'
+                    color: benchData.grossMarginStatus === '正常' ? '38a169' :
+                           benchData.grossMarginStatus === '偏低' ? 'd69e2e' :
+                           benchData.grossMarginStatus === '偏高' ? 'dd6b20' : '333333'
                   })
                 ]
               }),
@@ -2370,12 +2418,12 @@ export async function GET(request: NextRequest) {
                 children: [
                   createDataCell('增值税税负率', { bold: true }),
                   createDataCell(vatRate ? `${vatRate.toFixed(2)}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.vatRateBenchmark ? `${financialIndicators.vatRateBenchmark.min}% - ${financialIndicators.vatRateBenchmark.max}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.vatRateStatus || '-', {
+                  createDataCell(benchData.vatRateBenchmark ? `${benchData.vatRateBenchmark.min}% - ${benchData.vatRateBenchmark.max}%` : '-', { align: 'center' }),
+                  createDataCell(benchData.vatRateStatus || '-', {
                     align: 'center',
-                    color: financialIndicators?.vatRateStatus === '正常' ? '38a169' :
-                           financialIndicators?.vatRateStatus === '偏低预警' ? 'c53030' :
-                           financialIndicators?.vatRateStatus === '偏高' ? 'dd6b20' : '333333'
+                    color: benchData.vatRateStatus === '正常' ? '38a169' :
+                           benchData.vatRateStatus === '偏低预警' ? 'c53030' :
+                           benchData.vatRateStatus === '偏高' ? 'dd6b20' : '333333'
                   })
                 ]
               }),
@@ -2383,12 +2431,12 @@ export async function GET(request: NextRequest) {
                 children: [
                   createDataCell('所得税贡献率', { bold: true }),
                   createDataCell(citRate ? `${citRate.toFixed(2)}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.citRateBenchmark ? `${financialIndicators.citRateBenchmark.min}% - ${financialIndicators.citRateBenchmark.max}%` : '-', { align: 'center' }),
-                  createDataCell(financialIndicators?.citRateStatus || '-', {
+                  createDataCell(benchData.citRateBenchmark ? `${benchData.citRateBenchmark.min}% - ${benchData.citRateBenchmark.max}%` : '-', { align: 'center' }),
+                  createDataCell(benchData.citRateStatus || '-', {
                     align: 'center',
-                    color: financialIndicators?.citRateStatus === '正常' ? '38a169' :
-                           financialIndicators?.citRateStatus === '偏低预警' ? 'c53030' :
-                           financialIndicators?.citRateStatus === '偏高' ? 'dd6b20' : '333333'
+                    color: benchData.citRateStatus === '正常' ? '38a169' :
+                           benchData.citRateStatus === '偏低预警' ? 'c53030' :
+                           benchData.citRateStatus === '偏高' ? 'dd6b20' : '333333'
                   })
                 ]
               }),
