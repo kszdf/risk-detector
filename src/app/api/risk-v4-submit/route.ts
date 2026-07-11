@@ -405,7 +405,7 @@ function getNumber(value: unknown): number {
 }
 
 function generateRiskId(): string {
-  const now = new Date();
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000); // 北京时间
   const datePart = now.toISOString().replace(/[-:T]/g, '').slice(0, 12);
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
   return `RC${datePart}${random}`;
@@ -939,9 +939,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // 生成ID和时间
+    // 生成ID和时间（转成北京时间，避免海外节点时区问题）
     const riskId = generateRiskId();
-    const detectionTime = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const nowBeijing = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const detectionTime = nowBeijing.toISOString().replace('T', ' ').slice(0, 19);
 
     // 判断是否为v5版本（通过version字段或新数据结构判断）
     const isV5 = body.version === 'v5' || body.financialData?.periodType;
