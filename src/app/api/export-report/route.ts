@@ -935,6 +935,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 动态生成工商信息表格行（有数据才显示）
+    // 构建企业工商信息表格行（v2 - 补全联系方式/地区/行业）
     function buildBusinessInfoRows(info: any): TableRow[] {
       const rows: TableRow[] = [];
       const scaleMap: Record<string, string> = { L: '大型', M: '中型', S: '小型', XS: '微型' };
