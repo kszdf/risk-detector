@@ -835,24 +835,71 @@ function generateV5ReportContent(params: {
 }
 
 // 飞书写入
-async function writeToFeishu(fields: Record<string, unknown>): Promise<{ success: boolean; error?: string; detail?: any }> {
+// 飞书字段列表缓存（避免每次写入都查字段）
+let feishuFieldCache: { names: Set<string>; expireAt: number } | null = null;
+
+async function getFeishuFieldNames(token: string): Promise<Set<string>> {
+  const now = Date.now();
+  if (feishuFieldCache && feishuFieldCache.expireAt > now) {
+    return feishuFieldCache.names;
+  }
+
+  try {
+    const res = await fetch(
+      `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/fields?page_size=100`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    if (data.code === 0 && data.data?.items) {
+      const names = new Set(data.data.items.map((f: any) => f.field_name));
+      feishuFieldCache = { names, expireAt: now + 3600 * 1000 }; // 缓存1小时
+      return names;
+    }
+  } catch (e) {
+    console.error('获取飞书字段列表失败:', e);
+  }
+  // 获取失败时返回空集合，不过滤字段（保持原行为）
+  return new Set();
+}
+
+async function writeToFeishu(fields: Record<string, unknown>): Promise<{ success: boolean; error?: string; detail?: any; filtered?: string[] }> {
   const token = await getFeishuToken();
   if (!token) return { success: false, error: 'token获取失败' };
+
+  // 获取存在的字段列表，过滤掉不存在的字段（避免FieldNameNotFound导致整条写入失败）
+  const existingFields = await getFeishuFieldNames(token);
+  let filteredFields = fields;
+  let filtered: string[] = [];
+  
+  if (existingFields.size > 0) {
+    const filteredObj: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (existingFields.has(key)) {
+        filteredObj[key] = value;
+      } else {
+        filtered.push(key);
+      }
+    }
+    filteredFields = filteredObj;
+    if (filtered.length > 0) {
+      console.warn('写入飞书时跳过不存在的字段:', filtered);
+    }
+  }
 
   const response = await fetch(
     `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_TOKEN}/tables/${FEISHU_TABLE_ID}/records`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ fields })
+      body: JSON.stringify({ fields: filteredFields })
     }
   );
 
   const result = await response.json();
   if (!response.ok || result.code !== 0) {
-    return { success: false, error: `API返回code=${result.code}, msg=${result.msg}`, detail: result };
+    return { success: false, error: `API返回code=${result.code}, msg=${result.msg}`, detail: result, filtered };
   }
-  return { success: true };
+  return { success: true, filtered };
 }
 
 // 飞书消息通知
@@ -1028,7 +1075,14 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   // 使用交叉校验后的最终企业名称和信用代码（以工商登记信息为准）
   fields['企业名称'] = nameCreditCheck.finalName || enterpriseName;
   fields['统一信用代码'] = nameCreditCheck.finalCreditCode || creditCode;
-  fields['名称代码校验状态'] = nameCreditCheck.status;
+  // 状态值映射为飞书单选选项文本
+  const statusMap: Record<string, string> = {
+    'match': '一致',
+    'mismatch': '不一致',
+    'one_empty': '自动补全',
+    'none': '未校验'
+  };
+  fields['名称代码校验状态'] = statusMap[nameCreditCheck.status] || '未校验';
   fields['联系人'] = contactPerson;
   fields['联系电话'] = contactPhone;
   fields['所属行业'] = industry;
