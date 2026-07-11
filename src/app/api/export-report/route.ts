@@ -1402,10 +1402,10 @@ export async function GET(request: NextRequest) {
           }),
           ...licItems.map((l: any) => new TableRow({
             children: [
-              createDataCell(l.licenceNo || l.fileNumber || '-', { size: 18 }),
-              createDataCell(l.licenceName || l.title || '-', { size: 18 }),
-              createDataCell(l.department || l.organ || '-', { align: 'center', size: 18 }),
-              createDataCell(l.validTo || l.expireDate || '-', { align: 'center', size: 18 })
+              createDataCell(l.docNo || l.licenceNo || l.fileNumber || '-', { size: 18 }),
+              createDataCell(l.docName || l.licenceName || l.title || '-', { size: 18 }),
+              createDataCell(l.office || l.department || l.organ || '-', { align: 'center', size: 18 }),
+              createDataCell(l.validityTo || l.validTo || l.expireDate || '-', { align: 'center', size: 18 })
             ]
           }))
         ];
@@ -1418,10 +1418,9 @@ export async function GET(request: NextRequest) {
         sections.push(createHeading2('实际控制人'));
         risk.actualControllers.slice(0, 5).forEach((p: any, idx: number) => {
           const name = p.name || p.personName || '-';
-          const ratio = p.holdingRatio || p.ratio || '';
-          const type = p.type || '';
-          const desc = [type, ratio ? `持股 ${ratio}` : ''].filter(Boolean).join(' · ');
-          sections.push(createParagraph(`【${idx + 1}】${name}${desc ? `（${desc}）` : ''}`, { size: 20 }));
+          const ratio = p.controlPercent || p.finalBenefitPercent || p.holdingRatio || p.ratio || '';
+          const desc = ratio ? `（持股/控制比例：${ratio}）` : '';
+          sections.push(createParagraph(`【${idx + 1}】${name}${desc}`, { size: 20 }));
         });
       }
 
@@ -1430,10 +1429,10 @@ export async function GET(request: NextRequest) {
         sections.push(createHeading2('最终受益人'));
         risk.beneficiaries.slice(0, 5).forEach((p: any, idx: number) => {
           const name = p.name || p.personName || '-';
-          const ratio = p.holdingRatio || p.ratio || '';
-          const type = p.type || '';
-          const desc = [type, ratio ? `持股 ${ratio}` : ''].filter(Boolean).join(' · ');
-          sections.push(createParagraph(`【${idx + 1}】${name}${desc ? `（${desc}）` : ''}`, { size: 20 }));
+          const ratio = p.finalBenefitPercent || p.holdingRatio || p.ratio || '';
+          const reason = p.reason ? ` · ${p.reason}` : '';
+          const desc = ratio ? `（受益比例：${ratio}${reason}）` : '';
+          sections.push(createParagraph(`【${idx + 1}】${name}${desc}`, { size: 20 }));
         });
       }
 
@@ -1441,7 +1440,10 @@ export async function GET(request: NextRequest) {
       // 9. 主营产品/业务
       if (risk.mainProducts?.length > 0) {
         sections.push(createHeading2('主营产品/业务'));
-        const productNames = risk.mainProducts.map((p: any) => p.name || p.productName || p).filter(Boolean).slice(0, 15);
+        const productNames = risk.mainProducts.map((p: any) => {
+          if (typeof p === 'string') return p;
+          return p.name || p.productName || p.prodName || '';
+        }).filter(Boolean).slice(0, 15);
         if (productNames.length > 0) {
           sections.push(createParagraph('• ' + productNames.join('　• '), { size: 19, color: '555555' }));
         }
@@ -1450,7 +1452,10 @@ export async function GET(request: NextRequest) {
       // 10. 企业标签
       if (risk.tags?.length > 0) {
         sections.push(createHeading2('企业标签'));
-        const tagNames = risk.tags.map((t: any) => t.name || t.tagName || t).filter(Boolean);
+        const tagNames = risk.tags.map((t: any) => {
+          if (typeof t === 'string') return t;
+          return t.name || t.tagName || t.tag || '';
+        }).filter(Boolean);
         if (tagNames.length > 0) {
           sections.push(createParagraph('🏷️ ' + tagNames.join('　|　'), { size: 19, color: '2b6cb0' }));
         }
