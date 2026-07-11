@@ -1078,6 +1078,34 @@ export async function GET(request: NextRequest) {
         }));
       }
 
+      // 联系方式
+      const tel = info.contactInfo?.tel;
+      const email = info.contactInfo?.email;
+      if (tel || email) {
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('联系电话'),
+            createDataCell(tel || '-', { align: 'center' }),
+            createHeaderCell('电子邮箱'),
+            createDataCell(email || '-', { align: 'center' })
+          ]
+        }));
+      }
+
+      // 所属地区
+      if (info.province || info.city || info.county) {
+        const region = [info.province, info.city, info.county].filter(Boolean).join(' / ');
+        const industry = [info.industry, info.subIndustry].filter(Boolean).join(' · ');
+        rows.push(new TableRow({
+          children: [
+            createHeaderCell('所属地区'),
+            createDataCell(region, { align: 'center' }),
+            createHeaderCell('所属行业'),
+            createDataCell(industry || '-', { align: 'center' })
+          ]
+        }));
+      }
+
       return rows;
     }
 
@@ -1357,6 +1385,75 @@ export async function GET(request: NextRequest) {
           }))
         ];
         sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // 6. 行政许可资质
+      if (risk.adminLicenses?.length > 0) {
+        sections.push(createHeading2('行政许可资质'));
+        const licItems = risk.adminLicenses.slice(0, 10);
+        const rows = [
+          new TableRow({
+            children: [
+              createHeaderCell('许可文件编号'),
+              createHeaderCell('许可文件名称'),
+              createHeaderCell('决定机关'),
+              createHeaderCell('有效期至')
+            ]
+          }),
+          ...licItems.map((l: any) => new TableRow({
+            children: [
+              createDataCell(l.licenceNo || l.fileNumber || '-', { size: 18 }),
+              createDataCell(l.licenceName || l.title || '-', { size: 18 }),
+              createDataCell(l.department || l.organ || '-', { align: 'center', size: 18 }),
+              createDataCell(l.validTo || l.expireDate || '-', { align: 'center', size: 18 })
+            ]
+          }))
+        ];
+        sections.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
+      }
+
+      // ===== 企业核心人员补充 =====
+      // 7. 实际控制人
+      if (risk.actualControllers?.length > 0) {
+        sections.push(createHeading2('实际控制人'));
+        risk.actualControllers.slice(0, 5).forEach((p: any, idx: number) => {
+          const name = p.name || p.personName || '-';
+          const ratio = p.holdingRatio || p.ratio || '';
+          const type = p.type || '';
+          const desc = [type, ratio ? `持股 ${ratio}` : ''].filter(Boolean).join(' · ');
+          sections.push(createParagraph(`【${idx + 1}】${name}${desc ? `（${desc}）` : ''}`, { size: 20 }));
+        });
+      }
+
+      // 8. 受益人
+      if (risk.beneficiaries?.length > 0) {
+        sections.push(createHeading2('最终受益人'));
+        risk.beneficiaries.slice(0, 5).forEach((p: any, idx: number) => {
+          const name = p.name || p.personName || '-';
+          const ratio = p.holdingRatio || p.ratio || '';
+          const type = p.type || '';
+          const desc = [type, ratio ? `持股 ${ratio}` : ''].filter(Boolean).join(' · ');
+          sections.push(createParagraph(`【${idx + 1}】${name}${desc ? `（${desc}）` : ''}`, { size: 20 }));
+        });
+      }
+
+      // ===== 经营信息 =====
+      // 9. 主营产品/业务
+      if (risk.mainProducts?.length > 0) {
+        sections.push(createHeading2('主营产品/业务'));
+        const productNames = risk.mainProducts.map((p: any) => p.name || p.productName || p).filter(Boolean).slice(0, 15);
+        if (productNames.length > 0) {
+          sections.push(createParagraph('• ' + productNames.join('　• '), { size: 19, color: '555555' }));
+        }
+      }
+
+      // 10. 企业标签
+      if (risk.tags?.length > 0) {
+        sections.push(createHeading2('企业标签'));
+        const tagNames = risk.tags.map((t: any) => t.name || t.tagName || t).filter(Boolean);
+        if (tagNames.length > 0) {
+          sections.push(createParagraph('🏷️ ' + tagNames.join('　|　'), { size: 19, color: '2b6cb0' }));
+        }
       }
 
       // ===== 二、税务风险信息（重点高亮） =====
