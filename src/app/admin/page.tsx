@@ -143,7 +143,7 @@ export default function AdminPage() {
   // 下载报告
   const downloadReport = (riskId: string) => {
     const token = localStorage.getItem(ADMIN_TOKEN_KEY) || '';
-    window.open(`/api/export-report?riskId=${riskId}&admin_token=${token}`, '_blank');
+    window.open(`/api/download-report?riskId=${riskId}&admin_token=${token}`, '_blank');
   };
 
   // 登出
