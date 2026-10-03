@@ -226,6 +226,18 @@ function getNumber(value: unknown): number {
   return 0;
 }
 
+// 纳税人身份归一化：后端口径只认 general / small 两个值，其余（含未填）一律 undefined。
+// 铁律：未采集时绝不默认推断为一般纳税人——小规模适用3%征收率并可享1%减征、月10万以下免征，
+// 税负天然低于行业参考区间；若按一般纳税人口径对比，会把正当享受优惠的客户误判为「增值税税负异常偏低」高风险。
+function normalizeTaxpayerType(raw: unknown): 'general' | 'small' | undefined {
+  if (raw === 'general' || raw === 'small') return raw;
+  const text = String(raw ?? '').trim();
+  if (!text) return undefined;
+  if (/小规模/.test(text)) return 'small';
+  if (/一般纳税人/.test(text)) return 'general';
+  return undefined;
+}
+
 function generateRiskId(): string {
   const now = new Date(Date.now() + 8 * 60 * 60 * 1000); // 北京时间
   const datePart = now.toISOString().replace(/[-:T]/g, '').slice(0, 12);
@@ -410,6 +422,10 @@ function calculateV5CrossValidation(
   //    ②税负率偏离本身不是补税依据，补税依据只能是查实少计收入、虚增进项或计税错误；
   //    ③小规模纳税人适用征收率及免税优惠，不适用一般纳税人口径的行业税负率对比。
   const isSmallTaxpayer = financialData.taxpayerType === 'small';
+  // 未采集纳税人身份时的诚实标注：不假装知道口径，明确告知本项按一般纳税人口径对比、可能不适用
+  const taxpayerNote = financialData.taxpayerType
+    ? ''
+    : '（本次未采集纳税人身份，暂按一般纳税人口径对比；如贵单位为小规模纳税人，适用3%征收率及减免优惠，本项结论不适用）';
   const vatDiff = metrics.vatRate - benchmarks.vatRate.min;
   const vatWarningThreshold = benchmarks.vatRate.min * 0.5;
   const vatDeviation = (benchmarks.vatRate.min - metrics.vatRate).toFixed(2);
@@ -440,7 +456,7 @@ function calculateV5CrossValidation(
         level: 'high',
         levelIcon: '🔴',
         detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，显著低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
-        consequence: '税负率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明；如经核实存在少计收入、虚增进项或计税错误，按《增值税法》第二十条、《税收征收管理法》第三十五条核定，或按第六十三条追缴税款、按日加收万分之五滞纳金并处罚款。本项不提供补税金额结论',
+        consequence: '税负率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明；如经核实存在少计收入、虚增进项或计税错误，按《增值税法》第二十条、《税收征收管理法》第三十五条核定，或按第六十三条追缴税款、按日加收万分之五滞纳金并处罚款。本项不提供补税金额结论' + taxpayerNote,
         taxPolicy: '《增值税法》第二十条（销售额明显偏低且无正当理由可核定）；《税收征收管理法》第三十五条、第六十三条（注：行业参考区间非税务机关法定预警值，不构成补税依据）',
         estimate: true,
         estimateBasis: `行业参考区间下限${benchmarks.vatRate.min}%为行业经验与公开统计整理的非官方参考值，与贵企业实际税负率${metrics.vatRate.toFixed(2)}%的偏离度（${vatDeviation}个百分点）仅用于风险提示，不代表应补税额；实际是否补税取决于是否查实少计收入、虚增进项或计税错误，并需考虑进项抵扣、留抵、免税及优惠政策的适用。`
@@ -700,7 +716,7 @@ async function getFeishuFieldNames(token: string): Promise<Set<string>> {
     );
     const data = await res.json();
     if (data.code === 0 && data.data?.items) {
-      const names = new Set(data.data.items.map((f: any) => f.field_name));
+      const names = new Set<string>(data.data.items.map((f: any) => String(f.field_name)));
       feishuFieldCache = { names, expireAt: now + 3600 * 1000 }; // 缓存1小时
       return names;
     }
@@ -914,6 +930,13 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
   fields['所属行业'] = industry;
   fields['所属期'] = period;
   fields['年营收规模'] = revenueScale;
+  // 纳税人资质：写中文值，供报告接口（risk-report）读取后按 /小规模/ 匹配判定口径。
+  // 注意：飞书表若不存在「纳税人资质」字段，writeToFeishu 会自动过滤，需在多维表补该字段（单选/文本均可）。
+  fields['纳税人资质'] = financialData.taxpayerType === 'small'
+    ? '小规模纳税人'
+    : financialData.taxpayerType === 'general'
+      ? '一般纳税人'
+      : '未采集';
   fields['营业收入(万元)'] = financialData.revenue;
   fields['营业成本(万元)'] = financialData.cost;
   fields['实缴增值税(万元)'] = financialData.vatPaid;
@@ -992,6 +1015,8 @@ async function processV5Submission(body: Record<string, unknown>, riskId: string
     enterpriseName: nameCreditCheck.finalName || enterpriseName,
     creditCode: nameCreditCheck.finalCreditCode || creditCode,
     nameCreditCheck,
+    // 回显纳税人身份，便于前端/联调自检口径是否传达到位（null=未采集）
+    taxpayerType: financialData.taxpayerType || null,
     riskCounts: {
       red: redCount,
       yellow: yellowCount,
