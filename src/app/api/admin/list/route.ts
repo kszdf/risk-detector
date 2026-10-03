@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 // 飞书API配置
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || '';
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || '';
-const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || 'Z006bk7yuaxWalsdqoeck3mBnTb';
-const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || 'tblYYxtHDeBAx15j';
+const FEISHU_BASE_TOKEN = process.env.FEISHU_BASE_TOKEN || '';
+const FEISHU_TABLE_ID = process.env.FEISHU_TABLE_ID || '';
 
 // 管理员密钥
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'hgttax_admin_2026';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
 // 获取飞书token
 async function getFeishuToken(): Promise<string | null> {

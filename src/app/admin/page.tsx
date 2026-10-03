@@ -117,7 +117,7 @@ export default function AdminPage() {
   // 登录处理
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (tokenInput === 'hgttax_admin_2026') {
+    if (tokenInput.trim().length > 0) {
       localStorage.setItem(ADMIN_TOKEN_KEY, tokenInput);
       setIsLoggedIn(true);
       setLoginError('');

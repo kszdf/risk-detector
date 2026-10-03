@@ -11,8 +11,8 @@ function cleanEnvKey(val: string | undefined, fallback: string): string {
   return fallback;
 }
 
-const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, 'af2b3e9c39a64a2c9a926e102545adcd');
-const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, 'CABF5EE954826B72B15A7D7DE41979D9');
+const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, '');
+const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, '');
 
 // 生成企查查API签名Token
 function generateQccToken(inputTimespan?: string | null) {

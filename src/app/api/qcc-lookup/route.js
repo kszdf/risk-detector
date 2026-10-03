@@ -10,8 +10,8 @@ function cleanEnvKey(val, fallback) {
   return fallback;
 }
 
-const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, 'af2b3e9c39a64a2c9a926e102545adcd');
-const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, 'CABF5EE954826B72B15A7D7DE41979D9');
+const QCC_APP_KEY = cleanEnvKey(process.env.QCC_APP_KEY, '');
+const QCC_SECRET_KEY = cleanEnvKey(process.env.QCC_SECRET_KEY, '');
 const QCC_BASE_URL = 'https://api.qichacha.com';
 
 function generateToken() {
