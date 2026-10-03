@@ -248,7 +248,8 @@ function calculateCrossValidation(
   incomeTaxPaid: number,
   totalAssets: number,
   totalLiabilities: number,
-  industry: string
+  industry: string,
+  taxpayerType?: string
 ): CrossValidationItem[] {
   const result: CrossValidationItem[] = [];
   
@@ -267,29 +268,45 @@ function calculateCrossValidation(
   
   const benchmarks = INDUSTRY_BENCHMARKS[industry] || INDUSTRY_BENCHMARKS['其他'];
 
-  // 增值税税负率偏低
+  // 增值税税负率偏离行业参考区间
+  //   口径说明：①行业参考区间为行业经验与公开统计整理的非官方参考值，非税务机关法定预警值，仅作风险提示；
+  //   ②税负率偏离本身不是补税依据，补税依据只能是查实少计收入、虚增进项或计税错误；
+  //   ③小规模纳税人适用征收率及免税优惠，不适用一般纳税人口径的行业税负率对比。
+  const isSmallTaxpayer = taxpayerType === 'small' || /小规模/.test(taxpayerType || '');
   if (metrics.vatRate < benchmarks.vatRate.min) {
     const vatDiff = metrics.vatRate - benchmarks.vatRate.min;
     const vatWarningThreshold = benchmarks.vatRate.min * 0.5;
-    if (vatDiff >= -vatWarningThreshold) {
+    const vatDeviation = (benchmarks.vatRate.min - metrics.vatRate).toFixed(2);
+    if (isSmallTaxpayer) {
+      result.push({
+        rule: '增值税税负率低于行业参考区间（小规模纳税人）',
+        level: 'medium',
+        levelIcon: '🟡',
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '贵单位为小规模纳税人，适用3%征收率，并可享受月销售额10万元以下免征增值税、适用3%征收率的应税销售收入减按1%征收等优惠（财政部 税务总局公告2023年第19号，执行至2027年12月31日），与一般纳税人口径的行业参考区间不可直接对比，本项仅作提示。如年应征增值税销售额已超过500万元，应及时办理一般纳税人登记',
+        taxPolicy: '《增值税法》第九条（小规模纳税人标准）、第十一条（征收率3%）、第二十三条（起征点免征）；财政部 税务总局公告2023年第19号',
+        estimate: true,
+        estimateBasis: '行业参考区间为行业经验与公开统计整理的非官方参考值，且小规模纳税人适用征收率与免税政策，本项偏离度不适用于贵单位，仅作提示。'
+      });
+    } else if (vatDiff >= -vatWarningThreshold) {
       result.push({
         rule: '增值税税负率偏低',
         level: 'medium',
         levelIcon: '🟡',
-        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业下限${benchmarks.vatRate.min}%`,
-        consequence: '税负率偏低可能面临纳税评估，需合理解释',
-        taxPolicy: '《增值税暂行条例》及行业税负监控标准'
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '税负率低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明（如集中采购导致进项较大、存货增加、享受即征即退或免税政策等）',
+        taxPolicy: '《增值税法》第二十条；《税收征收管理法》第三十五条（注：行业参考区间为经验与公开统计整理，非税务机关法定预警值）'
       });
     } else {
       result.push({
         rule: '增值税税负异常偏低',
         level: 'high',
         levelIcon: '🔴',
-        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，显著低于行业下限${benchmarks.vatRate.min}%`,
-        consequence: `预估需补缴增值税约${((benchmarks.vatRate.min - metrics.vatRate) / 100 * revenue).toFixed(0)}万元（按行业税负率下限静态反推应缴额，未核实际已缴、进项抵扣及税收优惠，属测算值非核定数），并处滞纳金`,
-        taxPolicy: '《税收征收管理法》及行业税负预警标准（指标异常将纳入纳税评估，需说明合理商业理由）',
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，显著低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '税负率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明；如经核实存在少计收入、虚增进项或计税错误，按《增值税法》第二十条、《税收征收管理法》第三十五条核定，或按第六十三条追缴税款、按日加收万分之五滞纳金并处罚款。本项不提供补税金额结论',
+        taxPolicy: '《增值税法》第二十条（销售额明显偏低且无正当理由可核定）；《税收征收管理法》第三十五条、第六十三条（注：行业参考区间非税务机关法定预警值，不构成补税依据）',
         estimate: true,
-        estimateBasis: `以行业增值税税负率下限${benchmarks.vatRate.min}%反推应缴增值税，与已申报税负率${metrics.vatRate.toFixed(2)}%的差额静态测算；未考虑进项抵扣、免税政策与企业实际经营差异，不等于实际应补税额。`
+        estimateBasis: `行业参考区间下限${benchmarks.vatRate.min}%为行业经验与公开统计整理的非官方参考值，与贵企业实际税负率${metrics.vatRate.toFixed(2)}%的偏离度（${vatDeviation}个百分点）仅用于风险提示，不代表应补税额；实际是否补税取决于是否查实少计收入、虚增进项或计税错误，并需考虑进项抵扣、留抵、免税及优惠政策的适用。`
       });
     }
   }
@@ -312,9 +329,11 @@ function calculateCrossValidation(
         rule: '毛利率异常偏低',
         level: 'high',
         levelIcon: '🔴',
-        detail: `毛利率${metrics.grossMargin.toFixed(1)}%，显著低于行业下限${benchmarks.grossMargin.min}%`,
-        consequence: '毛利率严重偏低，涉嫌隐匿收入或虚增成本，需补缴税款并处0.5-5倍罚款',
-        taxPolicy: '《税收征收管理法》第六十三条；《企业所得税法》'
+        detail: `毛利率${metrics.grossMargin.toFixed(1)}%，显著低于行业参考区间下限${benchmarks.grossMargin.min}%`,
+        consequence: '毛利率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明（如促销让利、原材料涨价、新工艺投入、存货跌价等）；如经查实存在在账簿上不列、少列收入或多列支出等偷税情形，方适用《税收征收管理法》第六十三条追缴税款、按日加收万分之五滞纳金，并处不缴或者少缴税款百分之五十以上五倍以下罚款',
+        taxPolicy: '《企业所得税法》第八条；《增值税法》第二十条、《税收征收管理法》第三十五条；如查实偷税适用第六十三条（注：行业参考区间非税务机关法定预警值）',
+        estimate: true,
+        estimateBasis: '行业参考区间为行业经验与公开统计整理的非官方参考值，毛利率偏离仅作风险提示；毛利率偏低本身不构成偷税，是否适用《税收征收管理法》第六十三条取决于是否查实具体偷税手段。'
       });
     }
   }
@@ -327,7 +346,7 @@ function calculateCrossValidation(
       levelIcon: '🔴',
       detail: `资产负债率${metrics.debtRatio.toFixed(1)}%，超过70%高风险线`,
       consequence: '负债率过高，财务风险较大，可能面临资金链断裂风险',
-      taxPolicy: '企业财务风险评估标准'
+      taxPolicy: '非税务指标：属企业财务健康预警，不计入税务风险等级判定'
     });
   } else if (metrics.debtRatio > 60) {
     result.push({
@@ -336,7 +355,7 @@ function calculateCrossValidation(
       levelIcon: '🟡',
       detail: `资产负债率${metrics.debtRatio.toFixed(1)}%，超过60%预警线`,
       consequence: '负债率偏高需关注偿债能力和资金链安全',
-      taxPolicy: '企业财务风险评估标准'
+      taxPolicy: '非税务指标：属企业财务健康预警，不计入税务风险等级判定'
     });
   }
 
@@ -1034,7 +1053,8 @@ export async function GET(req: NextRequest) {
     } else {
       // 根据财务数据重新计算
       crossValidation = calculateCrossValidation(
-        revenue, cost, vatPaid, incomeTaxPaid, totalAssets, totalLiabilities, basicInfo.industry
+        revenue, cost, vatPaid, incomeTaxPaid, totalAssets, totalLiabilities, basicInfo.industry,
+        extractFeishuText(fields['纳税人资质']) || ''
       );
     }
 

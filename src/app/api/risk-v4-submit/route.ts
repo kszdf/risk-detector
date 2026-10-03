@@ -187,25 +187,25 @@ interface QuestionInfo {
 }
 
 const QUESTION_MAPPING: Record<string, QuestionInfo> = {
-  'inv1': { module: 'invoice', moduleName: '发票与资金流', name: '四流不一致', consequence: '按偷税论处，补缴增值税+企业所得税，并处0.5-5倍罚款' },
-  'inv2': { module: 'invoice', moduleName: '发票与资金流', name: '私户收款未入账', consequence: '补缴增值税+所得税，0.5-5倍罚款' },
-  'inv3': { module: 'invoice', moduleName: '发票与资金流', name: '变名发票', consequence: '按虚开发票论处，补缴税款+罚款，情节严重可追究刑事责任' },
-  'inv4': { module: 'invoice', moduleName: '发票与资金流', name: '上游供应商异常', consequence: '进项转出+补缴增值税+罚款' },
-  'inv5': { module: 'invoice', moduleName: '发票与资金流', name: '红冲发票异常', consequence: '涉嫌虚开增值税发票，补缴税款+罚款' },
-  'rev1': { module: 'revenueCost', moduleName: '收入与成本', name: '延迟确认收入', consequence: '补缴增值税+所得税+滞纳金' },
-  'rev2': { module: 'revenueCost', moduleName: '收入与成本', name: '替票冲账', consequence: '费用调增+补缴企业所得税+罚款' },
-  'rev3': { module: 'revenueCost', moduleName: '收入与成本', name: '个人消费入公司账', consequence: '费用调增+补缴企业所得税+罚款' },
-  'rev4': { module: 'revenueCost', moduleName: '收入与成本', name: '存货账实不符', consequence: '涉嫌隐匿收入或虚增成本，补缴税款+罚款' },
-  'pp1': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '股东借款超一年未还', consequence: '视同分红，需代扣代缴20%个人所得税' },
-  'pp2': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '利润分配不规范', consequence: '涉嫌逃避个人所得税，补缴+罚款' },
-  'pp3': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '关联方资金互转', consequence: '转让定价调整风险，需补缴税款+滞纳金' },
-  'pp4': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '大额现金交易', consequence: '资金链异常，触发税务稽查重点关注' },
-  'pp5': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '报销替代工资', consequence: '补缴个人所得税+社保，0.5-5倍罚款' },
-  'tax1': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '逾期申报/缴税', consequence: '按日加收万分之五滞纳金，并处0.5-5倍罚款' },
-  'tax2': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '小微优惠滥用', consequence: '补缴优惠减免税款+滞纳金+罚款' },
-  'tax3': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税收洼地空壳公司', consequence: '核定征收优惠被否定，补缴全部税款+滞纳金' },
-  'tax4': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税负率低于行业均值', consequence: '面临纳税评估，补缴+滞纳金+0.5-5倍罚款' },
-  'tax5': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '被稽查/纳税评估', consequence: '再次被稽查概率显著提高' }
+  'inv1': { module: 'invoice', moduleName: '发票与资金流', name: '四流不一致', consequence: '合同流、发票流、资金流、货物流不一致属异常线索，需核实业务实质；如查实存在虚假交易或不列、少列收入，按《税收征收管理法》第六十三条追缴税款、按日加收万分之五滞纳金，并处不缴或者少缴税款百分之五十以上五倍以下罚款' },
+  'inv2': { module: 'invoice', moduleName: '发票与资金流', name: '私户收款未入账', consequence: '如经查实通过个人账户收取经营款项未入账，按《税收征收管理法》第六十三条认定为偷税，追缴增值税及企业所得税、按日加收万分之五滞纳金，并处不缴或者少缴税款百分之五十以上五倍以下罚款' },
+  'inv3': { module: 'invoice', moduleName: '发票与资金流', name: '变名发票', consequence: '如被认定为虚开发票，由税务机关没收违法所得；虚开金额在1万元以下的，可以并处5万元以下罚款；超过1万元的，并处5万元以上50万元以下罚款（《发票管理办法》第三十五条）；构成犯罪的依法追究刑事责任' },
+  'inv4': { module: 'invoice', moduleName: '发票与资金流', name: '上游供应商异常', consequence: '取得不符合规定的发票，对应进项税额不得抵扣（《增值税法》第十六条），需作进项转出并补缴增值税及滞纳金；相关支出不得税前扣除（国家税务总局公告2018年第28号）' },
+  'inv5': { module: 'invoice', moduleName: '发票与资金流', name: '红冲发票异常', consequence: '频繁、大额或异常红冲属发票风险监控指标，需说明合理商业理由；如查实为虚开发票，按《发票管理办法》第三十五条处罚；构成犯罪的依法追究刑事责任' },
+  'rev1': { module: 'revenueCost', moduleName: '收入与成本', name: '延迟确认收入', consequence: '纳税义务发生时间为收讫销售款项或取得索取销售款项凭据当日，先开具发票的为开具发票当日（《增值税法》第二十八条）；延迟确认的需补缴增值税及企业所得税并按日加收万分之五滞纳金' },
+  'rev2': { module: 'revenueCost', moduleName: '收入与成本', name: '替票冲账', consequence: '不符合规定的发票不得作为财务报销凭证（《发票管理办法》第二十条），相关支出不得税前扣除，需调增应纳税所得额补缴企业所得税及滞纳金' },
+  'rev3': { module: 'revenueCost', moduleName: '收入与成本', name: '个人消费入公司账', consequence: '与取得收入无关的支出不得税前扣除（《企业所得税法》第十条），需调增应纳税所得额补缴企业所得税；属个人所得性质的还应依法代扣代缴个人所得税' },
+  'rev4': { module: 'revenueCost', moduleName: '收入与成本', name: '存货账实不符', consequence: '账实不符且无正当理由的，税务机关有权核定应纳税额（《税收征收管理法》第三十五条）；如查实为少计收入或虚增成本，按第六十三条处理' },
+  'pp1': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '股东借款纳税年度终了未归还', consequence: '个人投资者从其投资企业借款，在纳税年度终了后既不归还又未用于企业生产经营的，视为利润分配，按"利息、股息、红利所得"项目依20%税率计征个人所得税（财税〔2003〕158号第二条）' },
+  'pp2': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '利润分配不规范', consequence: '如经查实未依法代扣代缴个人所得税，按《税收征收管理法》第六十九条处应扣未扣、应收未收税款百分之五十以上三倍以下罚款，并补缴税款及滞纳金' },
+  'pp3': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '关联方资金互转', consequence: '关联方资金往来不符合独立交易原则而减少应纳税收入或所得额的，税务机关可作特别纳税调整，补征税款并按国务院规定加收利息（《企业所得税法》第四十一条至第四十八条）' },
+  'pp4': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '大额现金交易', consequence: '大额现金交易属资金流异常监控指标，可能触发税务稽查重点关注，需准备交易真实性证明材料' },
+  'pp5': { module: 'publicPrivate', moduleName: '公私账户与股东', name: '报销替代工资', consequence: '以报销形式发放工资薪金，企业应依法代扣代缴个人所得税；应扣未扣的，处应扣未扣、应收未收税款百分之五十以上三倍以下罚款（《税收征收管理法》第六十九条）；纳税人不进行纳税申报造成不缴或者少缴的，处百分之五十以上五倍以下罚款（第六十四条第二款）；同时涉及社保缴费基数合规问题' },
+  'tax1': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '逾期申报/缴税', consequence: '逾期申报由税务机关责令限期改正，可以处二千元以下罚款；情节严重的，可以处二千元以上一万元以下罚款（《税收征收管理法》第六十二条）。逾期缴纳税款从滞纳之日起按日加收万分之五滞纳金（第三十二条）' },
+  'tax2': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '小微优惠滥用', consequence: '如经查实不符合小型微利企业条件而享受优惠的，追缴已减免税款并加收滞纳金；小型微利企业条件为年应纳税所得额不超过300万元、从业人数不超过300人、资产总额不超过5000万元（财政部 税务总局公告2023年第12号）' },
+  'tax3': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税收洼地空壳公司', consequence: '持有股权、股票、合伙企业财产份额等权益性投资的个人独资企业、合伙企业一律适用查账征收（财政部 税务总局公告2021年第41号）；无实质性经营、计税依据明显偏低又无正当理由的，税务机关有权核定应纳税额并补征税款及滞纳金' },
+  'tax4': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '税负率低于行业参考区间', consequence: '税负率低于行业参考区间属纳税评估重点关注指标，需准备合理商业理由说明；如经核实存在少计收入、虚增进项或计税错误，方按《增值税法》第二十条、《税收征收管理法》第三十五条核定或按第六十三条处理（行业参考区间非税务机关法定预警值，不构成补税依据）' },
+  'tax5': { module: 'taxPolicy', moduleName: '税务申报与政策', name: '被稽查/纳税评估', consequence: '曾被稽查或纳税评估的企业属重点监控对象，后续被再次选取检查的概率提高，建议完善票据与账簿管理' }
 };
 
 // 辅助函数
@@ -245,6 +245,9 @@ interface V5FinancialData {
   totalLiabilities: number;
   prevRevenue?: number;
   prevVatPaid?: number;
+  // 纳税人身份：general=一般纳税人，small=小规模纳税人
+  // 用途：小规模纳税人适用征收率并可享受免税、减征优惠，与一般纳税人口径的行业税负率不可直接对比
+  taxpayerType?: 'general' | 'small';
 }
 
 // 旧版财务数据类型（4期分层）
@@ -402,29 +405,45 @@ function calculateV5CrossValidation(
   const benchmarks = INDUSTRY_BENCHMARKS[industry] || INDUSTRY_BENCHMARKS['其他'];
   const revenue = financialData.revenue;
 
-  // 1. 增值税税负率偏低
+  // 1. 增值税税负率偏离行业参考区间
+  //    口径说明：①行业参考区间为行业经验与公开统计整理的非官方参考值，非税务机关法定预警值，仅作风险提示；
+  //    ②税负率偏离本身不是补税依据，补税依据只能是查实少计收入、虚增进项或计税错误；
+  //    ③小规模纳税人适用征收率及免税优惠，不适用一般纳税人口径的行业税负率对比。
+  const isSmallTaxpayer = financialData.taxpayerType === 'small';
   const vatDiff = metrics.vatRate - benchmarks.vatRate.min;
   const vatWarningThreshold = benchmarks.vatRate.min * 0.5;
+  const vatDeviation = (benchmarks.vatRate.min - metrics.vatRate).toFixed(2);
   if (metrics.vatRate < benchmarks.vatRate.min) {
-    if (vatDiff >= -vatWarningThreshold) {
+    if (isSmallTaxpayer) {
+      result.push({
+        rule: '增值税税负率低于行业参考区间（小规模纳税人）',
+        level: 'medium',
+        levelIcon: '🟡',
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '贵单位为小规模纳税人，适用3%征收率，并可享受月销售额10万元以下免征增值税、适用3%征收率的应税销售收入减按1%征收等优惠（财政部 税务总局公告2023年第19号，执行至2027年12月31日），与一般纳税人口径的行业参考区间不可直接对比，本项仅作提示。如年应征增值税销售额已超过500万元，应及时办理一般纳税人登记',
+        taxPolicy: '《增值税法》第九条（小规模纳税人标准）、第十一条（征收率3%）、第二十三条（起征点免征）；财政部 税务总局公告2023年第19号',
+        estimate: true,
+        estimateBasis: '行业参考区间为行业经验与公开统计整理的非官方参考值，且小规模纳税人适用征收率与免税政策，本项偏离度不适用于贵单位，仅作提示。'
+      });
+    } else if (vatDiff >= -vatWarningThreshold) {
       result.push({
         rule: '增值税税负率偏低',
         level: 'medium',
         levelIcon: '🟡',
-        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业下限${benchmarks.vatRate.min}%`,
-        consequence: '税负率偏低可能面临纳税评估，需合理解释',
-        taxPolicy: '《增值税暂行条例》及行业税负监控标准'
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '税负率低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明（如集中采购导致进项较大、存货增加、享受即征即退或免税政策等）',
+        taxPolicy: '《增值税法》第二十条；《税收征收管理法》第三十五条（注：行业参考区间为经验与公开统计整理，非税务机关法定预警值）'
       });
     } else {
       result.push({
         rule: '增值税税负异常偏低',
         level: 'high',
         levelIcon: '🔴',
-        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，显著低于行业下限${benchmarks.vatRate.min}%`,
-        consequence: `税负率严重偏低，预估需补缴增值税约${((benchmarks.vatRate.min - metrics.vatRate) / 100 * revenue).toFixed(0)}万元（按行业税负率下限静态反推应缴额，未核实际已缴、进项抵扣及税收优惠，属测算值非核定数），并处滞纳金`,
-        taxPolicy: '《税收征收管理法》及行业税负预警标准（指标异常将纳入纳税评估，需说明合理商业理由）',
+        detail: `增值税税负率${metrics.vatRate.toFixed(2)}%，显著低于行业参考区间下限${benchmarks.vatRate.min}%，偏离${vatDeviation}个百分点`,
+        consequence: '税负率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明；如经核实存在少计收入、虚增进项或计税错误，按《增值税法》第二十条、《税收征收管理法》第三十五条核定，或按第六十三条追缴税款、按日加收万分之五滞纳金并处罚款。本项不提供补税金额结论',
+        taxPolicy: '《增值税法》第二十条（销售额明显偏低且无正当理由可核定）；《税收征收管理法》第三十五条、第六十三条（注：行业参考区间非税务机关法定预警值，不构成补税依据）',
         estimate: true,
-        estimateBasis: `以行业增值税税负率下限${benchmarks.vatRate.min}%反推应缴增值税，与已申报税负率${metrics.vatRate.toFixed(2)}%的差额静态测算；未考虑进项抵扣、免税政策与企业实际经营差异，不等于实际应补税额。`
+        estimateBasis: `行业参考区间下限${benchmarks.vatRate.min}%为行业经验与公开统计整理的非官方参考值，与贵企业实际税负率${metrics.vatRate.toFixed(2)}%的偏离度（${vatDeviation}个百分点）仅用于风险提示，不代表应补税额；实际是否补税取决于是否查实少计收入、虚增进项或计税错误，并需考虑进项抵扣、留抵、免税及优惠政策的适用。`
       });
     }
   }
@@ -472,9 +491,11 @@ function calculateV5CrossValidation(
         rule: '毛利率异常偏低',
         level: 'high',
         levelIcon: '🔴',
-        detail: `毛利率${metrics.grossMargin.toFixed(1)}%，显著低于行业下限${benchmarks.grossMargin.min}%`,
-        consequence: '毛利率严重偏低，涉嫌隐匿收入或虚增成本，需补缴税款并处0.5-5倍罚款',
-        taxPolicy: '《税收征收管理法》第六十三条；《企业所得税法》'
+        detail: `毛利率${metrics.grossMargin.toFixed(1)}%，显著低于行业参考区间下限${benchmarks.grossMargin.min}%`,
+        consequence: '毛利率显著低于行业参考区间，属纳税评估重点关注指标，需准备合理商业理由说明（如促销让利、原材料涨价、新工艺投入、存货跌价等）；如经查实存在在账簿上不列、少列收入或多列支出等偷税情形，方适用《税收征收管理法》第六十三条追缴税款、按日加收万分之五滞纳金，并处不缴或者少缴税款百分之五十以上五倍以下罚款',
+        taxPolicy: '《企业所得税法》第八条；《增值税法》第二十条、《税收征收管理法》第三十五条；如查实偷税适用第六十三条（注：行业参考区间非税务机关法定预警值）',
+        estimate: true,
+        estimateBasis: '行业参考区间为行业经验与公开统计整理的非官方参考值，毛利率偏离仅作风险提示；毛利率偏低本身不构成偷税，是否适用《税收征收管理法》第六十三条取决于是否查实具体偷税手段。'
       });
     }
   }
@@ -487,7 +508,7 @@ function calculateV5CrossValidation(
       levelIcon: '🔴',
       detail: `资产负债率${metrics.debtRatio.toFixed(1)}%，超过70%高风险线`,
       consequence: '负债率过高，财务风险较大，可能面临资金链断裂风险',
-      taxPolicy: '企业财务风险评估标准'
+      taxPolicy: '非税务指标：属企业财务健康预警，不计入税务风险等级判定'
     });
   } else if (metrics.debtRatio > 60) {
     result.push({
@@ -496,7 +517,7 @@ function calculateV5CrossValidation(
       levelIcon: '🟡',
       detail: `资产负债率${metrics.debtRatio.toFixed(1)}%，超过60%预警线`,
       consequence: '负债率偏高需关注偿债能力和资金链安全',
-      taxPolicy: '企业财务风险评估标准'
+      taxPolicy: '非税务指标：属企业财务健康预警，不计入税务风险等级判定'
     });
   }
 
