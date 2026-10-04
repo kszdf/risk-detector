@@ -19,7 +19,7 @@ export default function Home() {
         textAlign: 'center',
         maxWidth: '500px'
       }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>税智云 · 财税风险检测</h1>
+        <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>税检康 · 财税风险检测</h1>
         <p style={{ opacity: 0.9, marginBottom: '2rem', lineHeight: 1.6 }}>
           基于 20 年财税实战经验，20 道题快速识别企业税务风险。
         </p>
